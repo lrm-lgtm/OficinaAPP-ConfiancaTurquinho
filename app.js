@@ -41,6 +41,7 @@ function go(name){
   if(name==="orders") renderOrders();
   if(name==="clients") renderClients();
   if(name==="new-os") setWizardStep(1);
+  if(name==="client-approval") renderApprovalState();
 }
 
 document.querySelectorAll("[data-go]").forEach(btn=>btn.addEventListener("click",()=>go(btn.dataset.go)));
@@ -54,8 +55,18 @@ function statusBadge(status){
   return '<span class="status '+cls+'">'+status+"</span>";
 }
 
+function getDemoApproval(){
+  try{return JSON.parse(localStorage.getItem("oficina-approval-000123")||"null")}catch{return null}
+}
 function allOrders(){
-  return [...JSON.parse(localStorage.getItem("oficina-orders")||"[]"),...demoOrders];
+  const approval=getDemoApproval();
+  const demo=demoOrders.map(o=>{
+    if(o.id!==34 || !approval) return o;
+    if(approval.status==="approved") return {...o,status:"Aprovado",kind:"service",stage:"Liberado para execução"};
+    if(approval.status==="revision") return {...o,status:"Revisão solicitada",kind:"waiting",stage:"Cliente solicitou revisão"};
+    return o;
+  });
+  return [...JSON.parse(localStorage.getItem("oficina-orders")||"[]"),...demo];
 }
 
 function allClients(){
@@ -295,17 +306,58 @@ function openDetail(id){
 
 document.getElementById("addBudgetItem").addEventListener("click",()=>toast("Na versão funcional, abre a busca de peça/serviço."));
 document.getElementById("copyApproval").addEventListener("click",async()=>{
-  const link=location.origin+location.pathname+"#aprovar";
+  const link=location.origin+location.pathname+"?approval=demo-000123#aprovar";
   try{await navigator.clipboard.writeText(link);toast("Link de aprovação copiado.");}
   catch{toast("Link pronto para compartilhar.");}
 });
+function formatDecisionTime(iso){
+  try{return new Intl.DateTimeFormat("pt-BR",{dateStyle:"short",timeStyle:"short"}).format(new Date(iso))}catch{return ""}
+}
+function saveDemoApproval(status,name){
+  const record={
+    budget:"000123",
+    revision:2,
+    amount:720,
+    status,
+    name,
+    decidedAt:new Date().toISOString()
+  };
+  localStorage.setItem("oficina-approval-000123",JSON.stringify(record));
+  renderApprovalState();
+  renderDashboard();
+  renderOrders();
+}
+function renderApprovalState(){
+  const record=getDemoApproval();
+  const input=document.getElementById("approvalName");
+  const actions=document.getElementById("approvalActions");
+  const out=document.getElementById("decisionResult");
+  if(!record){
+    input.disabled=false;
+    actions.hidden=false;
+    out.className="decision-result";
+    out.innerHTML="";
+    return;
+  }
+  input.value=record.name||input.value;
+  input.disabled=true;
+  actions.hidden=true;
+  if(record.status==="approved"){
+    out.className="decision-result decision-card approved";
+    out.innerHTML='<b>✓ Orçamento aprovado</b><span>Revisão '+record.revision+' · R$ '+record.amount.toFixed(2).replace(".",",")+'</span><span>Confirmado por '+escapeHtml(record.name)+' em '+formatDecisionTime(record.decidedAt)+'</span><small>A oficina já pode visualizar esta decisão na demonstração.</small>';
+  }else{
+    out.className="decision-result decision-card revision";
+    out.innerHTML='<b>↺ Revisão solicitada</b><span>Revisão '+record.revision+' · R$ '+record.amount.toFixed(2).replace(".",",")+'</span><span>Solicitado por '+escapeHtml(record.name)+' em '+formatDecisionTime(record.decidedAt)+'</span><small>A oficina deve ajustar o orçamento e enviar uma nova revisão.</small>';
+  }
+}
 document.getElementById("approveBudget").addEventListener("click",()=>{
   const name=document.getElementById("approvalName").value.trim();
   if(!name){toast("Informe o nome para aprovar.");return}
-  const out=document.getElementById("decisionResult");out.style.color="#63dfa0";out.textContent="✓ Orçamento aprovado por "+name+".";
+  saveDemoApproval("approved",name);
 });
 document.getElementById("rejectBudget").addEventListener("click",()=>{
-  const out=document.getElementById("decisionResult");out.style.color="#ff817a";out.textContent="Solicitação de revisão registrada na demonstração.";
+  const name=document.getElementById("approvalName").value.trim()||"Cliente";
+  saveDemoApproval("revision",name);
 });
 document.getElementById("finishService").addEventListener("click",()=>{
   const pending=[...document.querySelectorAll(".task input")].filter(x=>!x.checked).length;
@@ -331,3 +383,4 @@ renderDashboard();
 renderOrders();
 renderClients();
 updatePhotoProgress();
+renderApprovalState();
