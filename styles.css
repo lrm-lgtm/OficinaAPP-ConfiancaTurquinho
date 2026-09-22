@@ -2004,3 +2004,10 @@ body.no-scroll .os-global-actions{
 body.staff-locked main,body.staff-locked .bottomnav{pointer-events:none;user-select:none}
 body.staff-locked .bottomnav{opacity:.18}
 body.public-mode .internal-access-gate{display:none!important}
+
+
+/* ===== v12.4.1 auth gate layering fix ===== */
+/* The access gate must disappear while the login/create-account sheet is open. */
+body.sheet-open .internal-access-gate{
+  display:none!important;
+}
