@@ -7,7 +7,7 @@
   <meta name="description" content="Auto Mecânica Confiança — gestão de oficina">
   <title>Auto Mecânica Confiança</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=10.4">
+  <link rel="stylesheet" href="./styles.css?v=10.5">
 </head>
 <body>
   <header class="appbar">
@@ -152,37 +152,47 @@
       <button class="btn primary full" data-go="client-approval">Visualizar aprovação do cliente</button>
     </section>
 
-    <section class="view client-view public-approval" data-view="client-approval">
-      <div class="approval-brand approval-brand-banner approval-brand-premium"><span class="brand-logo-art approval-logo-art" role="img" aria-label="Auto Mecânica Confiança"></span></div>
-      <div class="approval-box">
-        <span>Orçamento #000123 · válido para este veículo</span>
-        <h1>R$ 720,00</h1>
-        <p>Chevrolet Onix 1.0 · ABC1D23</p>
-      </div>
-      <div class="approval-items">
-        <div><span>Barra estabilizadora</span><b>R$ 320,00</b></div>
-        <div><span>Terminal de direção</span><b>R$ 280,00</b></div>
-        <div><span>Alinhamento e balanceamento</span><b>R$ 120,00</b></div>
-      </div>
-      <label class="floating-label">Seu nome<input id="approvalName" value="João da Silva"></label>
-      <div class="signature-block" id="signatureBlock">
-        <div class="signature-head">
-          <div><b>Assinatura do cliente</b><small>Assine com o dedo dentro do quadro.</small></div>
-          <button type="button" id="clearSignature">Limpar</button>
+    <section class="view client-view public-approval approval-v105" data-view="client-approval">
+      <div class="approval-brand approval-brand-banner approval-brand-premium compact-public-brand"><span class="brand-logo-art approval-logo-art" role="img" aria-label="Auto Mecânica Confiança"></span></div>
+
+      <div class="approval-summary-compact">
+        <div>
+          <small>ORÇAMENTO #000123 · REVISÃO 2</small>
+          <b>Chevrolet Onix 1.0 · ABC1D23</b>
         </div>
-        <canvas id="approvalSignature" class="signature-canvas" aria-label="Área para assinatura do cliente"></canvas>
-        <div class="signature-placeholder" id="signaturePlaceholder">Assine aqui</div>
+        <strong>R$ 720,00</strong>
       </div>
-      <label class="approval-consent">
-        <input type="checkbox" id="approvalConsent">
-        <span>Li e aprovo a revisão atual do orçamento e autorizo a execução dos itens aprovados.</span>
-      </label>
-      <p class="approval-note">Ao confirmar, você aprova a revisão atual do orçamento no valor de <b>R$ 720,00</b>. Qualquer alteração posterior exige nova aprovação.</p>
-      <div id="approvalActions">
-        <button class="btn success full big" id="approveBudget">✓ Assinar e aprovar orçamento</button>
-        <button class="btn outline-danger full" id="rejectBudget">Solicitar revisão</button>
+
+      <div class="approval-items compact-approval-items">
+        <div><span>Barra estabilizadora</span><b>R$ 320</b></div>
+        <div><span>Terminal de direção</span><b>R$ 280</b></div>
+        <div><span>Alinhamento e balanceamento</span><b>R$ 120</b></div>
       </div>
+
+      <div class="approval-sign-card">
+        <label class="floating-label compact-name">Nome do cliente<input id="approvalName" value="João da Silva" autocomplete="name"></label>
+
+        <div class="signature-block compact-signature" id="signatureBlock">
+          <div class="signature-head">
+            <div><b>Assinatura</b><small>Desenhe com o dedo</small></div>
+            <div class="signature-tools"><span id="signatureStatus">Pendente</span><button type="button" id="clearSignature">Limpar</button></div>
+          </div>
+          <canvas id="approvalSignature" class="signature-canvas" aria-label="Área para assinatura do cliente"></canvas>
+          <div class="signature-placeholder" id="signaturePlaceholder">Assine aqui</div>
+        </div>
+
+        <label class="approval-consent compact-consent">
+          <input type="checkbox" id="approvalConsent">
+          <span>Li o orçamento e autorizo a execução dos itens acima.</span>
+        </label>
+      </div>
+
       <div class="decision-result" id="decisionResult"></div>
+
+      <div id="approvalActions" class="approval-actionbar">
+        <button class="btn outline-danger" id="rejectBudget">Solicitar revisão</button>
+        <button class="btn success big" id="approveBudget" disabled>✓ Aprovar e assinar</button>
+      </div>
     </section>
 
     <section class="view" data-view="mechanic">
@@ -267,6 +277,6 @@
   </div>
 
   <div class="toast" id="toast"></div>
-  <script src="./app.js?v=10.4"></script>
+  <script src="./app.js?v=10.5"></script>
 </body>
 </html>
