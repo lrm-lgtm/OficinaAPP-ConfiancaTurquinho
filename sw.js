@@ -1,7 +1,7 @@
-const CACHE="oficina-v12-4-real";
+const CACHE="oficina-v12-4-1";
 const STATIC_ASSETS=[
-  "./styles.css?v=12.4",
-  "./app.js?v=12.4",
+  "./styles.css?v=12.4.1",
+  "./app.js?v=12.4.1",
   "./manifest.webmanifest",
   "./icon.svg"
 ];
