@@ -41,3 +41,24 @@ main{max-width:760px;margin:auto}.view{display:none;padding:18px 14px 32px}.view
 .toast{position:fixed;left:50%;bottom:92px;z-index:60;transform:translate(-50%,14px);opacity:0;background:#fff;color:#111;padding:11px 14px;border-radius:12px;font-size:12px;font-weight:800;pointer-events:none;transition:.2s;box-shadow:var(--shadow);max-width:90%;text-align:center}.toast.show{opacity:1;transform:translate(-50%,0)}
 .modal{position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.72);display:grid;place-items:end center;padding:12px}.modal[hidden]{display:none}.modal-card{width:min(100%,560px);background:#14181b;border:1px solid var(--line);border-radius:20px;padding:16px;box-shadow:var(--shadow)}.modal-head{display:flex;justify-content:space-between;align-items:center}.modal-head h2{margin:0 0 15px}.modal-head button{border:0;background:transparent;color:#fff;font-size:28px}
 @media(min-width:700px){.view{padding:25px 20px 42px}.dashboard-grid{grid-template-columns:repeat(4,1fr)}.metric{min-height:145px}.capture-grid{grid-template-columns:repeat(5,1fr)}.bottomnav{width:620px;left:50%;right:auto;transform:translateX(-50%);border:1px solid #2a3035;border-bottom:0;border-radius:18px 18px 0 0}}
+
+/* acabamento v6 */
+.view{padding-bottom:116px}
+.navicon{display:block;width:23px;height:27px;margin:auto}
+.navicon svg{width:23px;height:23px;display:block}
+body.public-mode{padding-bottom:0}
+body.public-mode .appbar,
+body.public-mode .bottomnav{display:none!important}
+body.public-mode main{max-width:620px}
+body.public-mode .view{padding-top:max(22px,env(safe-area-inset-top));padding-bottom:42px}
+.public-approval{min-height:100vh}
+.public-approval .approval-brand{justify-content:flex-start;margin:0 0 20px;padding-bottom:16px;border-bottom:1px solid var(--line)}
+.public-approval .approval-brand>div:last-child{display:flex;flex-direction:column}
+.public-approval .approval-brand small{font-size:8px;letter-spacing:1.8px;color:var(--muted);font-weight:900;margin-bottom:3px}
+.public-approval .approval-brand b{font-size:13px}
+.public-approval .approval-box{padding:20px 16px}
+.public-approval .approval-box h1{margin:10px 0 5px}
+.public-approval .approval-items{margin:12px 0 16px}
+.public-approval .floating-label{margin-top:4px}
+.public-approval .btn.big{margin-top:8px}
+@media(min-width:700px){.view{padding-bottom:120px}body.public-mode .view{padding-bottom:50px}}
