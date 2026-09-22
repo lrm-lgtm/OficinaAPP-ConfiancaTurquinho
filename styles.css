@@ -1917,3 +1917,46 @@ body.no-scroll .os-global-actions{
   font-size:8.5px;
   text-align:right;
 }
+
+
+/* ===== v12.1 real inspection evidence ===== */
+.inspection-loading{
+  padding:18px 10px;
+  color:var(--muted);
+  text-align:center;
+  font-size:9px;
+}
+.evidence-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:7px;
+}
+.evidence-photo{
+  min-width:0;
+  padding:0;
+  overflow:hidden;
+  border:1px solid var(--line);
+  border-radius:11px;
+  background:#121619;
+  color:#d7dde0;
+  text-align:left;
+}
+.evidence-photo img,.evidence-missing{
+  display:block;
+  width:100%;
+  aspect-ratio:4/3;
+  object-fit:cover;
+  background:#0d1012;
+}
+.evidence-missing{
+  display:grid;
+  place-items:center;
+  color:#707980;
+  font-size:8px;
+}
+.evidence-photo span{
+  display:block;
+  padding:6px 7px;
+  font-size:8px;
+  font-weight:800;
+}
