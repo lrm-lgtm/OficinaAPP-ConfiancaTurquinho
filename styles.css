@@ -1789,3 +1789,56 @@ body.no-scroll .os-global-actions{
 @media(max-width:430px){
   .os-global-actions-v118{grid-template-columns:1fr}
 }
+
+
+/* ===== v11.9 stage counters + time pressure ===== */
+.stage-tabs button{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+}
+.stage-tabs button em{
+  min-width:16px;
+  height:16px;
+  display:grid;
+  place-items:center;
+  padding:0 4px;
+  border-radius:999px;
+  background:#242a2e;
+  color:#9ca5ab;
+  font-size:6.5px;
+  font-style:normal;
+}
+.stage-tabs button.active em{
+  background:rgba(255,255,255,.18);
+  color:#fff;
+}
+.health-badge>span{
+  display:block;
+  line-height:1.05;
+}
+.health-badge small{
+  display:block;
+  margin-top:2px;
+  opacity:.75;
+  font-size:5.8px;
+  font-weight:800;
+}
+.compact-card-actions{
+  display:flex;
+  align-items:stretch;
+  gap:4px;
+  padding:4px;
+}
+.compact-card-actions .context-action{
+  flex:1;
+}
+.compact-quick{
+  min-width:38px;
+  border:1px solid #343b40;
+  border-radius:9px;
+  background:#20262a;
+  color:#9da6ac;
+  font-weight:900;
+  letter-spacing:1px;
+}
