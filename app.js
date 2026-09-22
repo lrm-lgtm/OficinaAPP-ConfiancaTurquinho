@@ -428,7 +428,9 @@ function historyLabel(eventType){
     budget_approved:"Orçamento aprovado pelo cliente",
     budget_revision_requested:"Cliente solicitou revisão",
     budget_sent:"Orçamento enviado para aprovação",
-    inspection_completed:"Vistoria concluída"
+    inspection_completed:"Vistoria concluída",
+    purchase_receipt_added:"Compra / comprovante anexado",
+    expense_added:"Despesa interna vinculada"
   })[eventType]||"Atualização da OS";
 }
 function historyDetail(row){
@@ -443,6 +445,8 @@ function historyDetail(row){
   if(row.event_type==="budget_sent") return "Revisão "+(p.revision||"—")+" · "+moneyBR(p.total||0);
   if(row.event_type==="budget_approved") return "Revisão "+(p.revision||"—")+" · "+moneyBR(p.total||0);
   if(row.event_type==="budget_revision_requested") return "Orçamento devolvido para ajuste.";
+  if(row.event_type==="purchase_receipt_added") return (p.supplier?String(p.supplier)+" · ":"")+moneyBR(p.total||0);
+  if(row.event_type==="expense_added") return String(p.description||"Despesa")+" · "+moneyBR(p.amount||0);
   return p.inspection?"Vistoria de entrada registrada.":"";
 }
 async function loadOrderHistory(order){
@@ -1999,9 +2003,54 @@ function parseMoneyInput(value){
   const number=Number(normalized);
   return Number.isFinite(number)?number:0;
 }
-function renderFinance(){
+async function renderFinance(){
   const list=document.getElementById("financeList");
   if(!list) return;
+
+  if(staffProfile?.active && supabaseClient){
+    list.innerHTML='<div class="search-empty">Carregando financeiro…</div>';
+    try{
+      const [{data:transactions,error:txError},{data:receivables,error:recError}]=await Promise.all([
+        supabaseClient.from("financial_transactions")
+          .select("id,work_order_id,direction,category,description,amount,status,due_at,settled_at,payment_method,created_at")
+          .order("created_at",{ascending:false})
+          .limit(30),
+        supabaseClient.from("receivables")
+          .select("id,work_order_id,amount,paid_amount,status,due_at")
+      ]);
+      if(txError) throw txError;
+      if(recError) throw recError;
+
+      const tx=transactions||[];
+      const rec=receivables||[];
+      const receivableTotal=rec
+        .filter(r=>!["paid","cancelled"].includes(r.status))
+        .reduce((sum,r)=>sum+Math.max(0,Number(r.amount||0)-Number(r.paid_amount||0)),0);
+      const payableTotal=tx
+        .filter(r=>r.direction==="expense"&&!["paid","cancelled","refunded"].includes(r.status))
+        .reduce((sum,r)=>sum+Number(r.amount||0),0);
+      const income=tx.filter(r=>r.direction==="income"&&r.status!=="cancelled").reduce((s,r)=>s+Number(r.amount||0),0);
+      const expenses=tx.filter(r=>r.direction==="expense"&&r.status!=="cancelled").reduce((s,r)=>s+Number(r.amount||0),0);
+
+      document.getElementById("financeReceivableTotal").textContent=moneyBR(receivableTotal);
+      document.getElementById("financeReceivableMeta").textContent=rec.filter(r=>!["paid","cancelled"].includes(r.status)).length+" em aberto";
+      document.getElementById("financePayableTotal").textContent=moneyBR(payableTotal);
+      document.getElementById("financeResultTotal").textContent=moneyBR(income-expenses);
+
+      list.innerHTML=tx.length?tx.map(row=>
+        '<article class="finance-row '+row.direction+'">'+
+          '<div class="finance-row-icon">'+(row.direction==="income"?"↙":"↗")+'</div>'+
+          '<div class="finance-row-copy"><b>'+escapeHtml(row.description)+'</b><small>'+escapeHtml(row.category)+(row.work_order_id?' · vinculada à OS':'')+'</small></div>'+
+          '<div class="finance-row-value"><b>'+(row.direction==="income"?"+ ":"- ")+moneyBR(row.amount)+'</b><small>'+escapeHtml(row.status)+'</small></div>'+
+        '</article>'
+      ).join(""):'<div class="search-empty">Nenhum movimento financeiro ainda.</div>';
+      return;
+    }catch(error){
+      list.innerHTML='<div class="search-empty">Não foi possível carregar o financeiro do servidor.</div>';
+      return;
+    }
+  }
+
   const base=[
     {type:"income",title:"OS #000123",meta:"A receber · João da Silva",amount:720,status:"Aberto"},
     {type:"expense",title:"Compra de peças",meta:"Auto Peças Centro · OS #000121",amount:316,status:"Pago"},
@@ -2015,7 +2064,15 @@ function renderFinance(){
     status:"Rascunho",
     receipt:d.receiptName||""
   }));
-  list.innerHTML=[...drafts,...base].map(row=>
+  const rows=[...drafts,...base];
+  const receivableTotal=rows.filter(x=>x.type==="income").reduce((s,x)=>s+Number(x.amount||0),0);
+  const payableTotal=rows.filter(x=>x.type==="expense").reduce((s,x)=>s+Number(x.amount||0),0);
+  document.getElementById("financeReceivableTotal").textContent=moneyBR(receivableTotal);
+  document.getElementById("financeReceivableMeta").textContent=rows.filter(x=>x.type==="income").length+" em aberto";
+  document.getElementById("financePayableTotal").textContent=moneyBR(payableTotal);
+  document.getElementById("financeResultTotal").textContent=moneyBR(receivableTotal-payableTotal);
+
+  list.innerHTML=rows.map(row=>
     '<article class="finance-row '+row.type+'">'+
       '<div class="finance-row-icon">'+(row.type==="income"?"↙":"↗")+'</div>'+
       '<div class="finance-row-copy"><b>'+escapeHtml(row.title)+'</b><small>'+escapeHtml(row.meta)+(row.receipt?' · 📎 '+escapeHtml(row.receipt):'')+'</small></div>'+
@@ -2023,6 +2080,88 @@ function renderFinance(){
     '</article>'
   ).join("");
 }
+
+async function resolveWorkOrderFromInput(value){
+  const raw=String(value||"").trim();
+  if(!raw) return null;
+  const number=parseInt(raw.replace(/\D/g,""),10);
+  if(!Number.isFinite(number)) return null;
+  const {data}=await supabaseClient.from("work_orders").select("id,number").eq("number",number).maybeSingle();
+  return data||null;
+}
+async function findOrCreateSupplier(name){
+  const value=String(name||"").trim();
+  if(!value) return null;
+  const {data:existing}=await supabaseClient.from("suppliers").select("id,name").ilike("name",value).limit(1).maybeSingle();
+  if(existing) return existing;
+  const {data,error}=await supabaseClient.from("suppliers").insert({name:value}).select("id,name").single();
+  if(error) throw error;
+  return data;
+}
+async function saveReceiptPurchaseToServer(fd,file){
+  const supplier=await findOrCreateSupplier(fd.get("supplier"));
+  const order=await resolveWorkOrderFromInput(fd.get("order"));
+  const amount=parseMoneyInput(fd.get("total"));
+  if(amount<=0) throw new Error("invalid_amount");
+
+  let receiptPath=null;
+  let receiptMime=null;
+  if(file){
+    const ext=(file.name.split(".").pop()||"bin").replace(/[^a-z0-9]/gi,"").toLowerCase()||"bin";
+    receiptPath="finance/receipts/"+new Date().toISOString().slice(0,10)+"/"+crypto.randomUUID()+"."+ext;
+    const {error:uploadError}=await supabaseClient.storage.from("oficina-evidence").upload(receiptPath,file,{
+      contentType:file.type||"application/octet-stream",
+      upsert:false
+    });
+    if(uploadError) throw uploadError;
+    receiptMime=file.type||null;
+  }
+
+  const dateRaw=String(fd.get("date")||"").trim();
+  const purchasedAt=dateRaw?new Date(dateRaw+"T12:00:00").toISOString():new Date().toISOString();
+  const {data:purchase,error}=await supabaseClient.from("purchases").insert({
+    supplier_id:supplier?.id||null,
+    work_order_id:order?.id||null,
+    purchased_at:purchasedAt,
+    total:amount,
+    payment_status:"open",
+    receipt_storage_path:receiptPath,
+    receipt_mime:receiptMime,
+    extraction_status:"not_requested",
+    extracted_payload:{
+      original_filename:file?.name||null,
+      notes:String(fd.get("notes")||"").trim()||null,
+      source:"pwa_v12_2"
+    },
+    created_by:staffSession?.user?.id||null
+  }).select("id").single();
+  if(error) throw error;
+
+  const {error:txError}=await supabaseClient.from("financial_transactions").insert({
+    work_order_id:order?.id||null,
+    purchase_id:purchase.id,
+    direction:"expense",
+    category:"Peças / compra",
+    description:"Compra · "+(supplier?.name||"Fornecedor não informado"),
+    amount,
+    status:"open",
+    internal_notes:String(fd.get("notes")||"").trim()||null,
+    created_by:staffSession?.user?.id||null
+  });
+  if(txError) throw txError;
+
+  if(order?.id){
+    await supabaseClient.from("activity_log").insert({
+      work_order_id:order.id,
+      actor_user_id:staffSession?.user?.id||null,
+      actor_type:"user",
+      event_type:"purchase_receipt_added",
+      payload:{purchase_id:purchase.id,total:amount,supplier:supplier?.name||null,receipt:receiptPath}
+    });
+  }
+  return purchase;
+}
+
 document.getElementById("financeReceiptShortcut")?.addEventListener("click",()=>openSheet(financeReceiptSheet));
 document.getElementById("financeExpenseShortcut")?.addEventListener("click",()=>openSheet(financeExpenseSheet));
 
@@ -2037,10 +2176,29 @@ financeReceiptInput?.addEventListener("change",()=>{
   }
 });
 
-financeReceiptForm?.addEventListener("submit",event=>{
+financeReceiptForm?.addEventListener("submit",async event=>{
   event.preventDefault();
   const fd=new FormData(financeReceiptForm);
   const file=financeReceiptInput?.files?.[0];
+
+  if(staffProfile?.active && supabaseClient){
+    const submit=financeReceiptForm.querySelector('button[type="submit"]');
+    submit.disabled=true;
+    try{
+      await saveReceiptPurchaseToServer(fd,file);
+      financeReceiptForm.reset();
+      if(receiptPreview) receiptPreview.innerHTML='<span>📷</span><b>Fotografar ou anexar</b><small>Imagem ou PDF da nota/comprovante</small>';
+      closeSheets();
+      await renderFinance();
+      toast("Compra e comprovante salvos no servidor.");
+    }catch(error){
+      toast("Não foi possível salvar a compra.");
+    }finally{
+      submit.disabled=false;
+    }
+    return;
+  }
+
   const rows=financeDrafts();
   const supplier=String(fd.get("supplier")||"Fornecedor não informado").trim();
   const amount=parseMoneyInput(fd.get("total"));
@@ -2060,21 +2218,55 @@ financeReceiptForm?.addEventListener("submit",event=>{
   if(receiptPreview) receiptPreview.innerHTML='<span>📷</span><b>Fotografar ou anexar</b><small>Imagem ou PDF da nota/comprovante</small>';
   closeSheets();
   renderFinance();
-  toast("Rascunho da compra salvo. O arquivo será enviado ao servidor após o login interno.");
+  toast("Rascunho da compra salvo localmente.");
 });
 
-financeExpenseForm?.addEventListener("submit",event=>{
+financeExpenseForm?.addEventListener("submit",async event=>{
   event.preventDefault();
   const fd=new FormData(financeExpenseForm);
-  const rows=financeDrafts();
   const desc=String(fd.get("description")||"Despesa").trim();
   const amount=parseMoneyInput(fd.get("amount"));
-  const order=String(fd.get("order")||"").trim();
+  const category=String(fd.get("category")||"Despesa");
+  const orderInput=String(fd.get("order")||"").trim();
+
+  if(staffProfile?.active && supabaseClient){
+    try{
+      const order=await resolveWorkOrderFromInput(orderInput);
+      const {error}=await supabaseClient.from("financial_transactions").insert({
+        work_order_id:order?.id||null,
+        direction:"expense",
+        category,
+        description:desc,
+        amount,
+        status:"open",
+        created_by:staffSession?.user?.id||null
+      });
+      if(error) throw error;
+      if(order?.id){
+        await supabaseClient.from("activity_log").insert({
+          work_order_id:order.id,
+          actor_user_id:staffSession?.user?.id||null,
+          actor_type:"user",
+          event_type:"expense_added",
+          payload:{description:desc,amount,category}
+        });
+      }
+      financeExpenseForm.reset();
+      closeSheets();
+      await renderFinance();
+      toast("Despesa salva no servidor.");
+    }catch(error){
+      toast("Não foi possível registrar a despesa.");
+    }
+    return;
+  }
+
+  const rows=financeDrafts();
   rows.unshift({
     id:Date.now(),
     type:"expense",
     title:desc,
-    meta:[String(fd.get("category")||"Despesa"),order||"Sem OS vinculada"].join(" · "),
+    meta:[category,orderInput||"Sem OS vinculada"].join(" · "),
     amount,
     createdAt:new Date().toISOString()
   });
