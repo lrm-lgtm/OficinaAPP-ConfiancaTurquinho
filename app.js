@@ -1620,6 +1620,20 @@ const pixResult=document.getElementById("pixResult");
 let lastPixCode="";
 
 async function ensurePilotBudgetLoaded(){
+  const selectedOrder=allOrders().find(o=>String(o.id)===String(selectedBudgetOrderId));
+  if(selectedOrder && currentBudgetRevision){
+    return {
+      id:currentBudgetRevision.id,
+      revision:currentBudgetRevision.revision,
+      total:currentBudgetRevision.total,
+      order:{
+        id:selectedOrder.id,
+        number:selectedOrder.raw?.number||parseInt(String(selectedOrder.ref||"").replace(/\D/g,""),10)||null,
+        customer:{name:selectedOrder.customer},
+        vehicle:{plate:selectedOrder.plate}
+      }
+    };
+  }
   if(remoteBudgetState) return remoteBudgetState;
   const payload=await loadPublicBudgetFromServer();
   return payload?.budget||remoteBudgetState;
@@ -1642,6 +1656,15 @@ async function createMercadoPagoPix(){
   const payerDocument=document.getElementById("pixPayerDocument").value.trim();
   const amount=Number(budget.total||0);
   const order=budget.order||{};
+  let receivableId=null;
+  if(staffProfile?.active && supabaseClient && budget.id){
+    const {data:receivable}=await supabaseClient
+      .from("receivables")
+      .select("id")
+      .eq("budget_revision_id",budget.id)
+      .maybeSingle();
+    receivableId=receivable?.id||null;
+  }
   if(!payerEmail || amount<=0){
     pixProviderStatus.textContent="Informe o e-mail do pagador e confira o valor.";
     return;
@@ -1660,6 +1683,7 @@ async function createMercadoPagoPix(){
       body:JSON.stringify({
         work_order_id:order.id,
         budget_revision_id:budget.id,
+        receivable_id:receivableId,
         amount,
         payer_email:payerEmail,
         payer_document:payerDocument,
