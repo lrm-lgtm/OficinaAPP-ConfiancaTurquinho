@@ -25,6 +25,10 @@ let staffSession=null;
 let staffProfile=null;
 let remoteBudgetState=null;
 let remoteApprovalState=null;
+let selectedBudgetOrderId=null;
+let currentBudgetRevision=null;
+let currentBudgetItems=[];
+let currentApprovalToken=null;
 let serverOrders=[];
 let serverClients=[];
 let serverDataReady=false;
@@ -115,7 +119,7 @@ async function staffSignup(){
 function approvalTokenFromUrl(){
   const params=new URLSearchParams(location.search);
   const candidate=params.get("approval")||params.get("token");
-  return /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(candidate||"")?candidate:V11_PILOT_APPROVAL_TOKEN;
+  return /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(candidate||"")?candidate:(currentApprovalToken||V11_PILOT_APPROVAL_TOKEN);
 }
 function moneyBR(value){
   return new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(Number(value||0));
@@ -155,6 +159,7 @@ function go(name){
   if(name==="orders") renderOrders();
   if(name==="clients") renderClients();
   if(name==="finance") renderFinance();
+  if(name==="budget") renderBudget();
   if(name==="new-os") setWizardStep(1);
   if(name==="client-approval"){
     renderApprovalState();
@@ -422,6 +427,7 @@ function historyLabel(eventType){
     work_order_operational_updated:"Andamento atualizado",
     budget_approved:"Orçamento aprovado pelo cliente",
     budget_revision_requested:"Cliente solicitou revisão",
+    budget_sent:"Orçamento enviado para aprovação",
     inspection_completed:"Vistoria concluída"
   })[eventType]||"Atualização da OS";
 }
@@ -434,6 +440,7 @@ function historyDetail(row){
     if(p.forecast_at) bits.push("Previsão: "+shortDateTime(p.forecast_at));
     return bits.join(" · ")||"Situação operacional alterada.";
   }
+  if(row.event_type==="budget_sent") return "Revisão "+(p.revision||"—")+" · "+moneyBR(p.total||0);
   if(row.event_type==="budget_approved") return "Revisão "+(p.revision||"—")+" · "+moneyBR(p.total||0);
   if(row.event_type==="budget_revision_requested") return "Orçamento devolvido para ajuste.";
   return p.inspection?"Vistoria de entrada registrada.":"";
@@ -529,8 +536,10 @@ function bindOrderOpeners(){
   document.querySelectorAll("[data-order-action]").forEach(btn=>btn.onclick=()=>{
     const o=allOrders().find(x=>String(x.id)===String(btn.dataset.orderAction));
     if(!o) return;
-    if(/aprovação|orçamento/i.test(o.stage+" "+o.status)) go("budget");
-    else openDetail(o.id);
+    if(/aprovação|orçamento/i.test(o.stage+" "+o.status)){
+      selectedBudgetOrderId=o.id;
+      go("budget");
+    }else openDetail(o.id);
   });
 }
 
@@ -996,7 +1005,7 @@ wizard.addEventListener("submit",async e=>{
     const order=await createOrder(fd,false);
     if(!order) return;
     resetWizard();
-    if(goBudget)go("budget"); else openDetail(order.id);
+    if(goBudget){selectedBudgetOrderId=order.id;go("budget")} else openDetail(order.id);
   }finally{
     if(submitBtn) submitBtn.disabled=false;
   }
@@ -1088,7 +1097,10 @@ function openDetail(id){
     detail.querySelectorAll(".tab-pane").forEach(p=>p.classList.toggle("active",p.dataset.pane===btn.dataset.osTab));
     queueScrollLock();
   }));
-  detail.querySelectorAll("[data-go]").forEach(btn=>btn.onclick=()=>go(btn.dataset.go));
+  detail.querySelectorAll("[data-go]").forEach(btn=>btn.onclick=()=>{
+    if(btn.dataset.go==="budget") selectedBudgetOrderId=o.id;
+    go(btn.dataset.go);
+  });
   document.getElementById("updateOsProgress")?.addEventListener("click",()=>openOsQuickSheet(o.id));
   loadOrderHistory(o);
   const complete=document.getElementById("completeEntry");
@@ -1101,11 +1113,386 @@ function openDetail(id){
   go("detail");
 }
 
-document.getElementById("addBudgetItem").addEventListener("click",()=>toast("Na versão funcional, abre a busca de peça/serviço."));
+// ---- v12.0 functional budget revisions ----
+const budgetItemSheet=document.getElementById("budgetItemSheet");
+const budgetItemForm=document.getElementById("budgetItemForm");
+
+function localBudgetStore(){
+  try{return JSON.parse(localStorage.getItem("oficina-budgets")||"{}")}catch{return {}}
+}
+function saveLocalBudgetStore(store){
+  localStorage.setItem("oficina-budgets",JSON.stringify(store));
+}
+function seedLocalBudget(order){
+  if(String(order?.id)==="34"){
+    return {
+      revision:{id:"local-rev-34-2",revision:2,status:"sent",subtotal:720,total:720,work_order_id:order.id},
+      items:[
+        {id:"local-item-1",kind:"part",description:"Barra estabilizadora",quantity:1,unit_price:320,line_total:320,sort_order:1},
+        {id:"local-item-2",kind:"part",description:"Terminal de direção",quantity:1,unit_price:280,line_total:280,sort_order:2},
+        {id:"local-item-3",kind:"service",description:"Alinhamento e balanceamento",quantity:1,unit_price:120,line_total:120,sort_order:3}
+      ],
+      approvalToken:V11_PILOT_APPROVAL_TOKEN
+    };
+  }
+  return {
+    revision:{id:"local-rev-"+String(order?.id||Date.now())+"-1",revision:1,status:"draft",subtotal:0,total:0,work_order_id:order?.id},
+    items:[],
+    approvalToken:null
+  };
+}
+function budgetStatusText(status){
+  return ({
+    draft:"Rascunho",
+    sent:"Aguardando aprovação",
+    approved:"Aprovado",
+    revision_requested:"Revisão solicitada",
+    superseded:"Substituído",
+    cancelled:"Cancelado"
+  })[status]||status||"Rascunho";
+}
+function budgetKindText(kind){
+  return ({part:"Peça",service:"Serviço",other:"Outro"})[kind]||kind||"Item";
+}
+function budgetEditable(){
+  return ["draft","revision_requested"].includes(currentBudgetRevision?.status);
+}
+function renderBudgetState(order){
+  const ref=document.getElementById("budgetOrderRef");
+  const status=document.getElementById("budgetStatus");
+  const rev=document.getElementById("budgetRevisionLabel");
+  const lock=document.getElementById("budgetLockHint");
+  const lines=document.getElementById("budgetLines");
+  const total=document.getElementById("budgetInternalTotal");
+  const add=document.getElementById("addBudgetItem");
+  const newRev=document.getElementById("newBudgetRevision");
+  const approvalHint=document.getElementById("budgetApprovalHint");
+
+  if(ref) ref.textContent=(order?.ref||"OS")+" · "+(order?.plate||"");
+  if(status){
+    status.textContent=budgetStatusText(currentBudgetRevision?.status);
+    status.className="status "+(currentBudgetRevision?.status==="approved"?"service":currentBudgetRevision?.status==="draft"?"open":"waiting");
+  }
+  if(rev) rev.textContent="R"+(currentBudgetRevision?.revision||1);
+  if(lock){
+    lock.textContent=budgetEditable()
+      ?"Esta revisão pode ser editada."
+      :"Revisão fechada. Qualquer alteração gera uma nova revisão e exige nova aprovação.";
+  }
+  if(total) total.textContent=moneyBR(currentBudgetRevision?.total||0);
+  if(add) add.disabled=false;
+  if(newRev) newRev.hidden=budgetEditable();
+  if(approvalHint){
+    approvalHint.textContent=currentBudgetRevision?.status==="approved"
+      ?"Revisão aprovada. Alterações exigem nova revisão."
+      : currentBudgetRevision?.status==="sent"
+        ?"Link enviado. Aguardando decisão do cliente."
+        :"Envie a revisão atual para aprovação.";
+  }
+
+  if(lines){
+    lines.innerHTML=currentBudgetItems.length
+      ? currentBudgetItems.map(item=>
+        '<div class="budget-line dynamic-budget-line" data-budget-item="'+item.id+'">'+
+          '<div><b>'+escapeHtml(item.description)+'</b><small>'+budgetKindText(item.kind)+' · '+Number(item.quantity||1).toLocaleString("pt-BR")+' × '+moneyBR(item.unit_price)+'</small></div>'+
+          '<div class="budget-line-value"><strong>'+moneyBR(item.line_total??Number(item.quantity||1)*Number(item.unit_price||0))+'</strong>'+
+          (budgetEditable()?'<button type="button" class="budget-delete-item" data-delete-budget-item="'+item.id+'" aria-label="Remover item">×</button>':'')+
+          '</div>'+
+        '</div>'
+      ).join("")
+      : '<div class="budget-empty"><b>Orçamento vazio</b><span>Adicione peças e serviços para começar.</span></div>';
+
+    lines.querySelectorAll("[data-delete-budget-item]").forEach(btn=>btn.addEventListener("click",()=>deleteBudgetItem(btn.dataset.deleteBudgetItem)));
+  }
+}
+async function loadServerBudget(order){
+  const {data:revision,error}=await supabaseClient
+    .from("budget_revisions")
+    .select("id,work_order_id,revision,status,subtotal,total,created_at,sent_at,approved_at")
+    .eq("work_order_id",order.id)
+    .order("revision",{ascending:false})
+    .limit(1)
+    .maybeSingle();
+  if(error) throw error;
+
+  let latest=revision;
+  if(!latest){
+    const {data:newRevision,error:createError}=await supabaseClient
+      .from("budget_revisions")
+      .insert({work_order_id:order.id,revision:1,status:"draft",subtotal:0,total:0,created_by:staffSession?.user?.id||null})
+      .select("id,work_order_id,revision,status,subtotal,total,created_at,sent_at,approved_at")
+      .single();
+    if(createError) throw createError;
+    latest=newRevision;
+  }
+  const {data:items,error:itemsError}=await supabaseClient
+    .from("budget_items")
+    .select("id,budget_revision_id,kind,description,quantity,unit_price,line_total,sort_order")
+    .eq("budget_revision_id",latest.id)
+    .order("sort_order",{ascending:true});
+  if(itemsError) throw itemsError;
+
+  const {data:token}=await supabaseClient
+    .from("approval_tokens")
+    .select("token,revoked_at")
+    .eq("budget_revision_id",latest.id)
+    .is("revoked_at",null)
+    .maybeSingle();
+
+  currentBudgetRevision=latest;
+  currentBudgetItems=items||[];
+  currentApprovalToken=token?.token||null;
+}
+async function loadLocalBudget(order){
+  const store=localBudgetStore();
+  const key=String(order.id);
+  if(!store[key]){store[key]=seedLocalBudget(order);saveLocalBudgetStore(store)}
+  currentBudgetRevision=store[key].revision;
+  currentBudgetItems=store[key].items||[];
+  currentApprovalToken=store[key].approvalToken||null;
+}
+async function renderBudget(){
+  const order=allOrders().find(o=>String(o.id)===String(selectedBudgetOrderId))||allOrders()[0];
+  if(!order) return;
+  selectedBudgetOrderId=order.id;
+  document.getElementById("budgetLines").innerHTML='<div class="budget-empty">Carregando orçamento…</div>';
+  try{
+    if(order.server && staffProfile?.active && supabaseClient) await loadServerBudget(order);
+    else await loadLocalBudget(order);
+    renderBudgetState(order);
+  }catch(error){
+    document.getElementById("budgetLines").innerHTML='<div class="budget-empty"><b>Falha ao carregar</b><span>Tente novamente.</span></div>';
+    toast("Não foi possível carregar o orçamento.");
+  }
+}
+async function recalcServerBudget(revisionId){
+  const {data:items,error}=await supabaseClient
+    .from("budget_items")
+    .select("line_total")
+    .eq("budget_revision_id",revisionId);
+  if(error) throw error;
+  const total=(items||[]).reduce((sum,item)=>sum+Number(item.line_total||0),0);
+  const {data,error:updateError}=await supabaseClient
+    .from("budget_revisions")
+    .update({subtotal:total,total})
+    .eq("id",revisionId)
+    .select("id,work_order_id,revision,status,subtotal,total,created_at,sent_at,approved_at")
+    .single();
+  if(updateError) throw updateError;
+  currentBudgetRevision=data;
+}
+async function createEditableRevision(){
+  const order=allOrders().find(o=>String(o.id)===String(selectedBudgetOrderId));
+  if(!order) throw new Error("order_not_found");
+  if(budgetEditable()) return currentBudgetRevision;
+
+  if(order.server && staffProfile?.active && supabaseClient){
+    const old=currentBudgetRevision;
+    const nextRevision=Number(old.revision||0)+1;
+    const {data:newRevision,error}=await supabaseClient
+      .from("budget_revisions")
+      .insert({
+        work_order_id:order.id,
+        revision:nextRevision,
+        status:"draft",
+        subtotal:Number(old.subtotal||old.total||0),
+        total:Number(old.total||0),
+        created_by:staffSession?.user?.id||null
+      })
+      .select("id,work_order_id,revision,status,subtotal,total,created_at,sent_at,approved_at")
+      .single();
+    if(error) throw error;
+
+    if(currentBudgetItems.length){
+      const copies=currentBudgetItems.map((item,index)=>({
+        budget_revision_id:newRevision.id,
+        kind:item.kind,
+        description:item.description,
+        quantity:Number(item.quantity),
+        unit_price:Number(item.unit_price),
+        sort_order:index+1
+      }));
+      const {error:copyError}=await supabaseClient.from("budget_items").insert(copies);
+      if(copyError) throw copyError;
+    }
+    await supabaseClient.from("budget_revisions").update({status:"superseded"}).eq("id",old.id);
+    await supabaseClient.from("approval_tokens").update({revoked_at:new Date().toISOString()}).eq("budget_revision_id",old.id).is("revoked_at",null);
+    await supabaseClient.from("work_orders").update({
+      status:"budget",
+      operational_state:"active",
+      blocked_since:null,
+      blocked_reason:null
+    }).eq("id",order.id);
+
+    currentBudgetRevision=newRevision;
+    currentApprovalToken=null;
+    await loadServerBudget(order);
+    await syncServerData({quiet:true});
+    return currentBudgetRevision;
+  }
+
+  const store=localBudgetStore();
+  const key=String(order.id);
+  const current=store[key]||seedLocalBudget(order);
+  current.revision={...current.revision,id:"local-rev-"+key+"-"+(Number(current.revision.revision||0)+1),revision:Number(current.revision.revision||0)+1,status:"draft"};
+  current.approvalToken=null;
+  store[key]=current;
+  saveLocalBudgetStore(store);
+  await loadLocalBudget(order);
+  return currentBudgetRevision;
+}
+async function addBudgetItem(fd){
+  const order=allOrders().find(o=>String(o.id)===String(selectedBudgetOrderId));
+  if(!order) return;
+  if(!budgetEditable()) await createEditableRevision();
+
+  const description=String(fd.get("description")||"").trim();
+  const kind=String(fd.get("kind")||"other");
+  const quantity=parseMoneyInput(fd.get("quantity"))||1;
+  const unitPrice=parseMoneyInput(fd.get("unit_price"));
+  if(!description||unitPrice<0){toast("Confira descrição e valor.");return}
+
+  if(order.server && staffProfile?.active && supabaseClient){
+    const {error}=await supabaseClient.from("budget_items").insert({
+      budget_revision_id:currentBudgetRevision.id,
+      kind,
+      description,
+      quantity,
+      unit_price:unitPrice,
+      sort_order:currentBudgetItems.length+1
+    });
+    if(error) throw error;
+    await recalcServerBudget(currentBudgetRevision.id);
+    await loadServerBudget(order);
+  }else{
+    const store=localBudgetStore();
+    const key=String(order.id);
+    const current=store[key]||seedLocalBudget(order);
+    current.items=current.items||[];
+    current.items.push({
+      id:"local-item-"+crypto.randomUUID(),
+      kind,description,quantity,unit_price:unitPrice,
+      line_total:Math.round(quantity*unitPrice*100)/100,
+      sort_order:current.items.length+1
+    });
+    const total=current.items.reduce((sum,item)=>sum+Number(item.line_total||0),0);
+    current.revision.subtotal=total;current.revision.total=total;
+    store[key]=current;saveLocalBudgetStore(store);
+    await loadLocalBudget(order);
+  }
+  renderBudgetState(order);
+}
+async function deleteBudgetItem(itemId){
+  const order=allOrders().find(o=>String(o.id)===String(selectedBudgetOrderId));
+  if(!order||!budgetEditable()) return;
+  if(order.server && staffProfile?.active && supabaseClient){
+    const {error}=await supabaseClient.from("budget_items").delete().eq("id",itemId).eq("budget_revision_id",currentBudgetRevision.id);
+    if(error){toast("Não foi possível remover o item.");return}
+    await recalcServerBudget(currentBudgetRevision.id);
+    await loadServerBudget(order);
+  }else{
+    const store=localBudgetStore();const key=String(order.id);
+    const current=store[key]||seedLocalBudget(order);
+    current.items=(current.items||[]).filter(item=>String(item.id)!==String(itemId));
+    const total=current.items.reduce((sum,item)=>sum+Number(item.line_total||0),0);
+    current.revision.subtotal=total;current.revision.total=total;
+    store[key]=current;saveLocalBudgetStore(store);
+    await loadLocalBudget(order);
+  }
+  renderBudgetState(order);
+}
+async function sendBudgetForApproval(){
+  const order=allOrders().find(o=>String(o.id)===String(selectedBudgetOrderId));
+  if(!order) return;
+  if(Number(currentBudgetRevision?.total||0)<=0){toast("Adicione itens antes de enviar.");return}
+
+  if(order.server && staffProfile?.active && supabaseClient){
+    if(currentBudgetRevision.status==="approved"){
+      toast("Esta revisão já foi aprovada. Crie uma nova revisão para alterar.");
+      return;
+    }
+    if(currentBudgetRevision.status!=="sent"){
+      const {data,error}=await supabaseClient.from("budget_revisions").update({
+        status:"sent",sent_at:new Date().toISOString()
+      }).eq("id",currentBudgetRevision.id).select("id,work_order_id,revision,status,subtotal,total,created_at,sent_at,approved_at").single();
+      if(error) throw error;
+      currentBudgetRevision=data;
+    }
+    let token=currentApprovalToken;
+    if(!token){
+      const {data,error}=await supabaseClient.from("approval_tokens").insert({
+        budget_revision_id:currentBudgetRevision.id,
+        expires_at:new Date(Date.now()+30*24*60*60*1000).toISOString()
+      }).select("token").single();
+      if(error) throw error;
+      token=data.token;
+      currentApprovalToken=token;
+    }
+    await supabaseClient.from("work_orders").update({
+      status:"waiting_approval",
+      operational_state:"waiting_customer",
+      blocked_since:new Date().toISOString(),
+      blocked_reason:"Aguardando aprovação do orçamento"
+    }).eq("id",order.id);
+    await supabaseClient.from("activity_log").insert({
+      work_order_id:order.id,
+      actor_user_id:staffSession?.user?.id||null,
+      actor_type:"user",
+      event_type:"budget_sent",
+      payload:{budget_revision_id:currentBudgetRevision.id,revision:currentBudgetRevision.revision,total:currentBudgetRevision.total}
+    });
+    await syncServerData({quiet:true});
+    renderBudgetState(order);
+  }else{
+    currentApprovalToken=currentApprovalToken||V11_PILOT_APPROVAL_TOKEN;
+  }
+
+  const link=location.origin+location.pathname+"?approval="+encodeURIComponent(currentApprovalToken||V11_PILOT_APPROVAL_TOKEN)+"&v=12#aprovar";
+  try{await navigator.clipboard.writeText(link);toast("Link da revisão atual copiado.");}
+  catch{toast("Revisão pronta para compartilhar.");}
+}
+
+document.getElementById("addBudgetItem").addEventListener("click",async()=>{
+  if(!currentBudgetRevision) await renderBudget();
+  if(!budgetEditable()){
+    try{await createEditableRevision();renderBudgetState(allOrders().find(o=>String(o.id)===String(selectedBudgetOrderId)));toast("Nova revisão criada para edição.");}
+    catch{toast("Não foi possível criar nova revisão.");return}
+  }
+  budgetItemForm.reset();
+  budgetItemForm.elements.quantity.value="1";
+  document.getElementById("budgetItemPreview").textContent="Total do item: R$ 0,00";
+  openSheet(budgetItemSheet);
+});
+document.getElementById("newBudgetRevision").addEventListener("click",async()=>{
+  try{
+    await createEditableRevision();
+    renderBudgetState(allOrders().find(o=>String(o.id)===String(selectedBudgetOrderId)));
+    toast("Nova revisão criada.");
+  }catch{toast("Não foi possível criar a revisão.")}
+});
+budgetItemForm?.addEventListener("input",()=>{
+  const fd=new FormData(budgetItemForm);
+  const quantity=parseMoneyInput(fd.get("quantity"))||1;
+  const price=parseMoneyInput(fd.get("unit_price"));
+  document.getElementById("budgetItemPreview").textContent="Total do item: "+moneyBR(quantity*price);
+});
+budgetItemForm?.addEventListener("submit",async event=>{
+  event.preventDefault();
+  const btn=document.getElementById("saveBudgetItem");btn.disabled=true;
+  try{
+    await addBudgetItem(new FormData(budgetItemForm));
+    closeSheets();toast("Item adicionado ao orçamento.");
+  }catch{toast("Não foi possível adicionar o item.");}
+  finally{btn.disabled=false}
+});
 document.getElementById("copyApproval").addEventListener("click",async()=>{
-  const link=location.origin+location.pathname+"?approval="+encodeURIComponent(V11_PILOT_APPROVAL_TOKEN)+"&v=11#aprovar";
-  try{await navigator.clipboard.writeText(link);toast("Link de aprovação copiado.");}
-  catch{toast("Link pronto para compartilhar.");}
+  try{await sendBudgetForApproval()}catch{toast("Não foi possível preparar a aprovação.")}
+});
+document.getElementById("previewBudgetApproval").addEventListener("click",async()=>{
+  if(!currentApprovalToken){
+    try{await sendBudgetForApproval()}catch{toast("Prepare o orçamento antes de visualizar.");return}
+  }
+  go("client-approval");
 });
 // ---- v11 real public approval backend ----
 async function loadPublicBudgetFromServer(){
@@ -1859,13 +2246,13 @@ const staffAuthSheet=document.getElementById("staffAuthSheet");
 
 function openSheet(sheet){
   if(!sheet) return;
-  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,staffAuthSheet,pixPaymentSheet,osQuickSheet].forEach(s=>{if(s && s!==sheet)s.hidden=true});
+  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,staffAuthSheet,pixPaymentSheet,osQuickSheet,budgetItemSheet].forEach(s=>{if(s && s!==sheet)s.hidden=true});
   sheet.hidden=false;
   document.body.classList.add("sheet-open");
   document.body.classList.remove("no-scroll");
 }
 function closeSheets(){
-  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,staffAuthSheet,pixPaymentSheet,osQuickSheet].forEach(s=>{if(s)s.hidden=true});
+  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,staffAuthSheet,pixPaymentSheet,osQuickSheet,budgetItemSheet].forEach(s=>{if(s)s.hidden=true});
   document.body.classList.remove("sheet-open");
   queueScrollLock();
 }
