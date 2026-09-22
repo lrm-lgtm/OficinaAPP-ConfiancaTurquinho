@@ -2011,3 +2011,18 @@ body.public-mode .internal-access-gate{display:none!important}
 body.sheet-open .internal-access-gate{
   display:none!important;
 }
+
+
+/* ===== v12.4.2 auth UX fixes ===== */
+.auth-profile-card[hidden],
+#staffLogoutBtn[hidden]{
+  display:none!important;
+}
+#staffSignupBtn:disabled,
+#staffLoginBtn:disabled{
+  opacity:.55;
+  pointer-events:none;
+}
+.auth-message{
+  min-height:48px;
+}
