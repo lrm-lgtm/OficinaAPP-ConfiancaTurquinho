@@ -1244,3 +1244,52 @@ body.no-scroll .os-global-actions{
 }
 .extraction-hint b{font-size:9px;white-space:nowrap}
 .extraction-hint span{font-size:8px;color:#c9ba82;line-height:1.35}
+
+
+/* ===== v11.3 staff auth shell ===== */
+.auth-action{
+  font-size:15px!important;
+  color:#89939a;
+}
+.auth-action.pending-staff{color:#e0ae36;border-color:#5c491d}
+.auth-action.active-staff{color:#48d38a;border-color:#24593d}
+.auth-sheet-card{max-height:88vh;overflow:auto}
+.auth-profile-card{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  padding:10px 11px;
+  margin-bottom:10px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:#12171a;
+}
+.auth-profile-card b,.auth-profile-card small{display:block}
+.auth-profile-card b{font-size:12px}
+.auth-profile-card small{margin-top:2px;color:var(--muted);font-size:8px}
+.auth-profile-card>span{
+  padding:5px 7px;
+  border-radius:999px;
+  background:#30260d;
+  color:#d9b64e;
+  font-size:8px;
+  font-weight:900;
+}
+.auth-profile-card>span.ok{background:#113220;color:#60dda0}
+.auth-actions{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:7px;
+}
+.auth-message{
+  margin:9px 0;
+  padding:9px 10px;
+  border:1px solid #30373d;
+  border-radius:11px;
+  background:#101316;
+  color:#9da6ad;
+  font-size:8.5px;
+  line-height:1.45;
+}
+.private-badge.ok{background:#123521;color:#64dca0}
