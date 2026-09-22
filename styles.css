@@ -601,3 +601,39 @@ body.sheet-open{
   .compact-stats{grid-template-columns:1.2fr repeat(3,.7fr)}
   .wizard-actions{bottom:78px}
 }
+
+
+/* ===== v10.1 viewport-fit / no empty scroll ===== */
+html,body{overscroll-behavior-y:none}
+body{padding-bottom:0}
+main{min-height:0}
+.view{
+  min-height:calc(100dvh - 58px - 68px);
+  padding-bottom:78px;
+}
+body.no-scroll{
+  height:100dvh;
+  overflow:hidden;
+}
+body.no-scroll main{
+  height:calc(100dvh - 58px);
+  overflow:hidden;
+}
+body.no-scroll .view.active{
+  height:calc(100dvh - 58px);
+  min-height:0;
+  overflow:hidden;
+}
+body.no-scroll .bottomnav{
+  transform:none!important;
+}
+body.public-mode.no-scroll,
+body.sheet-open.no-scroll{
+  height:auto;
+  overflow:auto;
+}
+@supports not (height:100dvh){
+  body.no-scroll{height:100vh}
+  body.no-scroll main{height:calc(100vh - 58px)}
+  body.no-scroll .view.active{height:calc(100vh - 58px)}
+}
