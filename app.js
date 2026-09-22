@@ -16,8 +16,89 @@ const V11_SUPABASE_URL="https://koybcvdrbebeicxzitcf.supabase.co";
 const V11_PUBLIC_BUDGET_ENDPOINT=V11_SUPABASE_URL+"/functions/v1/public-budget";
 const V11_APPROVE_BUDGET_ENDPOINT=V11_SUPABASE_URL+"/functions/v1/approve-budget";
 const V11_PILOT_APPROVAL_TOKEN="59de1bbc-cf56-4579-a72b-a8f8e46cfe9d";
+const V11_SUPABASE_PUBLISHABLE_KEY="sb_publishable_MxXw0bpUQ0RIXkhwFsILHw_TteIueoe";
+const supabaseClient=window.supabase?.createClient
+  ? window.supabase.createClient(V11_SUPABASE_URL,V11_SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}})
+  : null;
+let staffSession=null;
+let staffProfile=null;
 let remoteBudgetState=null;
 let remoteApprovalState=null;
+
+function staffRoleLabel(role){
+  return ({owner:"Proprietário",manager:"Gerente",reception:"Recepção",mechanic:"Mecânico",finance:"Financeiro"})[role]||role||"Sem perfil";
+}
+function renderStaffAuthState(message=""){
+  const btn=document.getElementById("authStatusBtn");
+  const badge=document.getElementById("staffAuthBadge");
+  const card=document.getElementById("staffProfileCard");
+  const form=document.getElementById("staffAuthForm");
+  const logout=document.getElementById("staffLogoutBtn");
+  const msg=document.getElementById("staffAuthMessage");
+  const logged=Boolean(staffSession?.user);
+  const active=Boolean(staffProfile?.active);
+
+  if(btn){
+    btn.textContent=active?"●":logged?"◐":"○";
+    btn.classList.toggle("active-staff",active);
+    btn.classList.toggle("pending-staff",logged&&!active);
+    btn.title=active?(staffProfile.full_name+" · "+staffRoleLabel(staffProfile.role)):logged?"Acesso aguardando liberação":"Entrar no acesso interno";
+  }
+  if(badge){
+    badge.textContent=active?"online":logged?"pendente":"offline";
+    badge.classList.toggle("ok",active);
+  }
+  if(card){
+    card.hidden=!logged;
+    if(logged){
+      document.getElementById("staffProfileName").textContent=staffProfile?.full_name||staffSession.user.email||"Usuário";
+      document.getElementById("staffProfileRole").textContent=staffRoleLabel(staffProfile?.role);
+      document.getElementById("staffProfileState").textContent=active?"Liberado":"Aguardando liberação";
+      document.getElementById("staffProfileState").classList.toggle("ok",active);
+    }
+  }
+  if(form) form.hidden=active;
+  if(logout) logout.hidden=!logged;
+  if(msg){
+    msg.textContent=message || (active
+      ?"Acesso interno ativo. Próxima etapa: sincronizar OS, fotos e financeiro com o servidor."
+      : logged
+        ?"Conta criada, mas ainda sem permissão para dados da oficina. Um responsável precisa liberar este usuário."
+        :"Sem login: o app continua em modo demonstração/local.");
+  }
+}
+async function refreshStaffSession(message=""){
+  if(!supabaseClient){renderStaffAuthState("Biblioteca do servidor indisponível neste navegador.");return}
+  const {data:{session}}=await supabaseClient.auth.getSession();
+  staffSession=session||null;
+  staffProfile=null;
+  if(staffSession?.user){
+    const {data}=await supabaseClient.from("staff_profiles").select("id,full_name,role,active").eq("id",staffSession.user.id).maybeSingle();
+    staffProfile=data||null;
+  }
+  renderStaffAuthState(message);
+}
+async function staffLogin(){
+  if(!supabaseClient) return toast("Acesso ao servidor indisponível.");
+  const email=document.getElementById("staffAuthEmail").value.trim();
+  const password=document.getElementById("staffAuthPassword").value;
+  if(!email||!password) return toast("Informe e-mail e senha.");
+  const {error}=await supabaseClient.auth.signInWithPassword({email,password});
+  if(error){renderStaffAuthState("Não foi possível entrar: "+error.message);return}
+  await refreshStaffSession("Login realizado.");
+}
+async function staffSignup(){
+  if(!supabaseClient) return toast("Acesso ao servidor indisponível.");
+  const fullName=document.getElementById("staffAuthName").value.trim();
+  const email=document.getElementById("staffAuthEmail").value.trim();
+  const password=document.getElementById("staffAuthPassword").value;
+  if(!fullName||!email||password.length<6) return toast("Informe nome, e-mail e senha com 6+ caracteres.");
+  const {data,error}=await supabaseClient.auth.signUp({email,password,options:{data:{full_name:fullName}}});
+  if(error){renderStaffAuthState("Não foi possível criar o acesso: "+error.message);return}
+  await refreshStaffSession(data.session
+    ?"Conta criada. Aguardando liberação para acessar os dados internos."
+    :"Conta criada. Confirme o e-mail e depois entre no app.");
+}
 
 function approvalTokenFromUrl(){
   const params=new URLSearchParams(location.search);
@@ -63,6 +144,7 @@ function go(name){
   if(name==="new-os") setWizardStep(1);
   if(name==="client-approval"){
     renderApprovalState();
+refreshStaffSession();
     loadPublicBudgetFromServer();
     setTimeout(resizeApprovalSignature,60);
   }
@@ -1038,22 +1120,33 @@ window.visualViewport?.addEventListener("resize",queueScrollLock,{passive:true})
 const quickActionSheet=document.getElementById("quickActionSheet");
 const moreSheet=document.getElementById("moreSheet");
 const searchSheet=document.getElementById("searchSheet");
+const staffAuthSheet=document.getElementById("staffAuthSheet");
 
 function openSheet(sheet){
   if(!sheet) return;
-  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet].forEach(s=>{if(s && s!==sheet)s.hidden=true});
+  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,staffAuthSheet].forEach(s=>{if(s && s!==sheet)s.hidden=true});
   sheet.hidden=false;
   document.body.classList.add("sheet-open");
   document.body.classList.remove("no-scroll");
 }
 function closeSheets(){
-  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet].forEach(s=>{if(s)s.hidden=true});
+  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,staffAuthSheet].forEach(s=>{if(s)s.hidden=true});
   document.body.classList.remove("sheet-open");
   queueScrollLock();
 }
 document.querySelectorAll("[data-close-sheet]").forEach(btn=>btn.addEventListener("click",closeSheets));
 document.getElementById("quickActionBtn")?.addEventListener("click",()=>openSheet(quickActionSheet));
 document.getElementById("moreNavBtn")?.addEventListener("click",()=>openSheet(moreSheet));
+document.getElementById("authStatusBtn")?.addEventListener("click",()=>openSheet(staffAuthSheet));
+document.getElementById("staffAccessShortcut")?.addEventListener("click",()=>{closeSheets();openSheet(staffAuthSheet)});
+document.getElementById("staffLoginBtn")?.addEventListener("click",staffLogin);
+document.getElementById("staffSignupBtn")?.addEventListener("click",staffSignup);
+document.getElementById("staffLogoutBtn")?.addEventListener("click",async()=>{
+  await supabaseClient?.auth.signOut();
+  staffSession=null;staffProfile=null;
+  renderStaffAuthState("Sessão encerrada. Modo demonstração/local ativo.");
+});
+supabaseClient?.auth.onAuthStateChange(()=>setTimeout(()=>refreshStaffSession(),0));
 document.getElementById("globalSearchBtn")?.addEventListener("click",()=>{
   openSheet(searchSheet);
   setTimeout(()=>document.getElementById("globalSearchInput")?.focus(),80);
