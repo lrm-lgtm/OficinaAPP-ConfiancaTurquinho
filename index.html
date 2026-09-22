@@ -7,7 +7,7 @@
   <meta name="description" content="Auto Mecânica Confiança — gestão de oficina">
   <title>Auto Mecânica Confiança</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=11.9">
+  <link rel="stylesheet" href="./styles.css?v=12.0">
 </head>
 <body>
   <header class="appbar">
@@ -162,19 +162,33 @@
     </section>
 
     <section class="view" data-view="budget">
-      <div class="page-title"><div><span>OF-0034</span><h1>Orçamento</h1></div><span class="status waiting">Aguardando aprovação</span></div>
-      <div class="budget-sheet">
-        <div class="budget-line"><div><b>Barra estabilizadora</b><small>Peça + M.O.</small></div><strong>R$ 320,00</strong></div>
-        <div class="budget-line"><div><b>Terminal de direção</b><small>Peça + M.O.</small></div><strong>R$ 280,00</strong></div>
-        <div class="budget-line"><div><b>Alinhamento e balanceamento</b><small>Serviço</small></div><strong>R$ 120,00</strong></div>
-        <div class="budget-total"><span>Total</span><strong>R$ 720,00</strong></div>
+      <div class="page-title">
+        <div><span id="budgetOrderRef">OS</span><h1>Orçamento</h1></div>
+        <span class="status waiting" id="budgetStatus">Carregando</span>
       </div>
-      <button class="btn secondary full" id="addBudgetItem">＋ Adicionar item</button>
+
+      <div class="budget-revision-bar">
+        <div><span>Revisão</span><b id="budgetRevisionLabel">—</b></div>
+        <small id="budgetLockHint">Carregando orçamento…</small>
+      </div>
+
+      <div class="budget-sheet" id="budgetLines">
+        <div class="budget-empty">Carregando itens…</div>
+      </div>
+
+      <div class="budget-total budget-total-dynamic"><span>Total</span><strong id="budgetInternalTotal">R$ 0,00</strong></div>
+
+      <div class="budget-edit-actions">
+        <button class="btn secondary full" id="addBudgetItem">＋ Adicionar item</button>
+        <button class="btn secondary full" id="newBudgetRevision" hidden>↺ Criar nova revisão</button>
+      </div>
+
       <div class="send-card">
-        <div><b>Aprovação do cliente</b><small>Gere um link para aprovação remota.</small></div>
-        <button class="btn primary" id="copyApproval">Copiar link</button>
+        <div><b>Aprovação do cliente</b><small id="budgetApprovalHint">Envie a revisão atual para aprovação.</small></div>
+        <button class="btn primary" id="copyApproval">Enviar / link</button>
       </div>
-      <button class="btn primary full" data-go="client-approval">Visualizar aprovação do cliente</button>
+      <button class="btn primary full" id="previewBudgetApproval">Visualizar aprovação do cliente</button>
+
       <div class="send-card payment-provider-card">
         <div><b>Recebimento</b><small>Pix via Mercado Pago · integração preparada</small></div>
         <button class="btn secondary" id="openPixPayment">Cobrar Pix</button>
@@ -325,6 +339,27 @@
     </div>
   </div>
 
+  <div class="sheet" id="budgetItemSheet" hidden>
+    <button class="sheet-backdrop" data-close-sheet aria-label="Fechar"></button>
+    <div class="sheet-card budget-item-sheet-card">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title-row">
+        <div><small id="budgetItemSheetMeta">Orçamento</small><h2>Adicionar item</h2></div>
+        <span class="private-badge">interno</span>
+      </div>
+      <form id="budgetItemForm" class="finance-form">
+        <label>Descrição<input name="description" required placeholder="Ex.: Terminal de direção"></label>
+        <div class="formgrid">
+          <label>Tipo<select name="kind"><option value="part">Peça</option><option value="service">Serviço</option><option value="other">Outro</option></select></label>
+          <label>Quantidade<input name="quantity" inputmode="decimal" value="1"></label>
+        </div>
+        <label>Valor unitário<input name="unit_price" inputmode="decimal" required placeholder="0,00"></label>
+        <div class="budget-item-preview" id="budgetItemPreview">Total do item: R$ 0,00</div>
+        <button class="btn primary full" type="submit" id="saveBudgetItem">Adicionar ao orçamento</button>
+      </form>
+    </div>
+  </div>
+
   <div class="sheet" id="osQuickSheet" hidden>
     <button class="sheet-backdrop" data-close-sheet aria-label="Fechar"></button>
     <div class="sheet-card os-quick-sheet-card">
@@ -465,6 +500,6 @@
 
   <div class="toast" id="toast"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./app.js?v=11.9"></script>
+  <script src="./app.js?v=12.0"></script>
 </body>
 </html>
