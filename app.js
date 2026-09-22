@@ -128,13 +128,29 @@ async function refreshStaffSession(message=""){
   }
   syncInternalAccessGate(message);
 }
+function friendlyAuthError(error,action="login"){
+  const raw=String(error?.message||error||"").trim();
+  const lower=raw.toLowerCase();
+
+  if(lower.includes("after ") && lower.includes("seconds")){
+    const seconds=(raw.match(/after\s+(\d+)\s+seconds/i)||[])[1];
+    return "O pedido já foi enviado. "+(seconds?"Aguarde "+seconds+" segundos e ":"")+"confira seu e-mail antes de tentar novamente.";
+  }
+  if(lower.includes("rate limit")) return "Muitas tentativas em pouco tempo. Aguarde cerca de 1 minuto e tente novamente.";
+  if(lower.includes("email not confirmed")||lower.includes("email_not_confirmed")) return "Seu acesso já foi criado. Confirme o e-mail recebido e depois toque em Entrar.";
+  if(lower.includes("user already registered")||lower.includes("already registered")) return "Este e-mail já possui acesso. Use o botão Entrar.";
+  if(lower.includes("invalid login credentials")) return "E-mail ou senha incorretos.";
+  if(lower.includes("password")) return action==="signup"?"A senha precisa ter pelo menos 6 caracteres.":"Confira sua senha.";
+  return action==="signup"?"Não foi possível criar o acesso agora. Tente novamente em instantes.":"Não foi possível entrar agora. Tente novamente.";
+}
+
 async function staffLogin(){
   if(!supabaseClient) return toast("Acesso ao servidor indisponível.");
   const email=document.getElementById("staffAuthEmail").value.trim();
   const password=document.getElementById("staffAuthPassword").value;
   if(!email||!password) return toast("Informe e-mail e senha.");
   const {error}=await supabaseClient.auth.signInWithPassword({email,password});
-  if(error){renderStaffAuthState("Não foi possível entrar: "+error.message);return}
+  if(error){renderStaffAuthState(friendlyAuthError(error,"login"));return}
   await refreshStaffSession("Login realizado.");
 }
 async function staffSignup(){
@@ -143,11 +159,17 @@ async function staffSignup(){
   const email=document.getElementById("staffAuthEmail").value.trim();
   const password=document.getElementById("staffAuthPassword").value;
   if(!fullName||!email||password.length<6) return toast("Informe nome, e-mail e senha com 6+ caracteres.");
-  const {data,error}=await supabaseClient.auth.signUp({email,password,options:{data:{full_name:fullName}}});
-  if(error){renderStaffAuthState("Não foi possível criar o acesso: "+error.message);return}
-  await refreshStaffSession(data.session
-    ?"Conta criada. Aguardando liberação para acessar os dados internos."
-    :"Conta criada. Confirme o e-mail e depois entre no app.");
+  const signupBtn=document.getElementById("staffSignupBtn");
+  signupBtn.disabled=true;
+  try{
+    const {data,error}=await supabaseClient.auth.signUp({email,password,options:{data:{full_name:fullName}}});
+    if(error){renderStaffAuthState(friendlyAuthError(error,"signup"));return}
+    await refreshStaffSession(data.session
+      ?"Conta criada. Seu perfil já pode ser validado pela oficina."
+      :"Conta criada. Confirme o e-mail recebido e depois toque em Entrar.");
+  }finally{
+    signupBtn.disabled=false;
+  }
 }
 
 function approvalTokenFromUrl(){
