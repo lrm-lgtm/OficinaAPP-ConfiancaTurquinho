@@ -7,7 +7,7 @@
   <meta name="description" content="Auto Mecânica Confiança — gestão de oficina">
   <title>Auto Mecânica Confiança</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=12.3">
+  <link rel="stylesheet" href="./styles.css?v=12.4">
 </head>
 <body>
   <header class="appbar">
@@ -18,6 +18,18 @@
     <button class="appbar-action auth-action" id="authStatusBtn" aria-label="Acesso interno" title="Acesso interno">○</button>
     <button class="appbar-action install-action" id="installBtn" hidden aria-label="Instalar aplicativo" title="Instalar aplicativo">⇩</button>
   </header>
+
+  <section class="internal-access-gate" id="internalAccessGate" hidden>
+    <div class="gate-card">
+      <span class="gate-lock">🔐</span>
+      <div>
+        <small>AUTO MECÂNICA CONFIANÇA</small>
+        <h1>Acesso interno necessário</h1>
+        <p id="internalAccessGateText">Entre com um usuário liberado para operar dados reais da oficina.</p>
+      </div>
+      <button class="btn primary full" type="button" id="internalAccessGateBtn">Entrar / criar acesso</button>
+    </div>
+  </section>
 
   <main id="app">
     <section class="view active" data-view="dashboard">
@@ -325,7 +337,6 @@
       <button class="sheet-action" data-sheet-go="stock"><span>▦</span><div><b>Estoque</b><small>Peças e reservas</small></div></button>
       <button class="sheet-action" data-sheet-go="finance"><span>R$</span><div><b>Financeiro</b><small>Custos internos e recebimentos</small></div></button>
       <button class="sheet-action" id="staffAccessShortcut"><span>◉</span><div><b>Acesso interno</b><small>Login, perfil e sincronização</small></div></button>
-      <button class="sheet-action" data-sheet-go="client-approval"><span>✓</span><div><b>Aprovação demo</b><small>Visualizar página do cliente</small></div></button>
     </div>
   </div>
 
@@ -493,13 +504,13 @@
         </div>
       </form>
 
-      <div class="auth-message" id="staffAuthMessage">Sem login: o app continua em modo demonstração/local.</div>
+      <div class="auth-message" id="staffAuthMessage">Entre para acessar os dados reais da oficina.</div>
       <button class="btn outline-danger full" type="button" id="staffLogoutBtn" hidden>Sair deste aparelho</button>
     </div>
   </div>
 
   <div class="toast" id="toast"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./app.js?v=12.3"></script>
+  <script src="./app.js?v=12.4"></script>
 </body>
 </html>
