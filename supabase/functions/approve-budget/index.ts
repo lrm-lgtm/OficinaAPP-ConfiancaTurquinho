@@ -116,6 +116,33 @@ Deno.serve(async (req) => {
       .eq("id", budget.work_order_id);
     if (osError) throw osError;
 
+    let receivableId: string | null = null;
+    if (decision === "approved") {
+      const { data: existingReceivable } = await supabase
+        .from("receivables")
+        .select("id")
+        .eq("budget_revision_id", budget.id)
+        .maybeSingle();
+
+      if (existingReceivable?.id) {
+        receivableId = existingReceivable.id;
+      } else {
+        const { data: receivable, error: receivableError } = await supabase
+          .from("receivables")
+          .insert({
+            work_order_id: budget.work_order_id,
+            budget_revision_id: budget.id,
+            amount: Number(budget.total || 0),
+            paid_amount: 0,
+            status: "open",
+          })
+          .select("id")
+          .single();
+        if (receivableError) throw receivableError;
+        receivableId = receivable.id;
+      }
+    }
+
     await supabase.from("activity_log").insert({
       work_order_id: budget.work_order_id,
       actor_type: "customer",
@@ -128,6 +155,7 @@ Deno.serve(async (req) => {
       decision,
       revision: budget.revision,
       total: budget.total,
+      receivableId,
       decidedAt: new Date().toISOString(),
     }, { headers: { ...cors, "Cache-Control": "no-store" } });
   } catch (error) {
