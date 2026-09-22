@@ -1965,3 +1965,42 @@ body.no-scroll .os-global-actions{
 /* ===== v12.2 server-backed finance receipts ===== */
 .finance-row small{max-width:100%}
 .receipt-drop.server-ready{border-color:#3a6850}
+
+
+/* ===== v12.4 real-mode validation ===== */
+.internal-access-gate{
+  position:fixed;
+  inset:58px 0 0;
+  z-index:95;
+  display:grid;
+  place-items:center;
+  padding:18px;
+  background:radial-gradient(circle at 50% 10%,rgba(238,63,49,.10),transparent 36%),rgba(9,11,13,.985);
+}
+.internal-access-gate[hidden]{display:none!important}
+.gate-card{
+  width:min(100%,390px);
+  padding:20px;
+  border:1px solid #2d3439;
+  border-radius:20px;
+  background:linear-gradient(150deg,#171b1e,#101316);
+  box-shadow:0 24px 60px rgba(0,0,0,.38);
+  text-align:center;
+}
+.gate-lock{
+  display:grid;
+  place-items:center;
+  width:48px;
+  height:48px;
+  margin:0 auto 12px;
+  border-radius:15px;
+  background:#211817;
+  border:1px solid #52302c;
+  font-size:20px;
+}
+.gate-card small{color:#e2685b;font-size:7.5px;font-weight:900;letter-spacing:.7px}
+.gate-card h1{margin:5px 0 7px;font-size:20px}
+.gate-card p{margin:0 0 14px;color:#96a0a6;font-size:10px;line-height:1.5}
+body.staff-locked main,body.staff-locked .bottomnav{pointer-events:none;user-select:none}
+body.staff-locked .bottomnav{opacity:.18}
+body.public-mode .internal-access-gate{display:none!important}
