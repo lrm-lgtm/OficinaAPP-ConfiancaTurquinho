@@ -59,6 +59,7 @@ function go(name){
   window.scrollTo({top:0,behavior:"smooth"});
   if(name==="orders") renderOrders();
   if(name==="clients") renderClients();
+  if(name==="finance") renderFinance();
   if(name==="new-os") setWizardStep(1);
   if(name==="client-approval"){
     renderApprovalState();
@@ -880,7 +881,111 @@ document.getElementById("rejectBudget").addEventListener("click",async()=>{
     else toast("Não foi possível solicitar revisão.");
   }
 });
-document.getElementById("financeReceiptShortcut")?.addEventListener("click",()=>toast("Na v11.2, abre câmera/arquivo para registrar a notinha."));
+// ---- v11.2 internal finance UI ----
+const financeReceiptSheet=document.getElementById("financeReceiptSheet");
+const financeExpenseSheet=document.getElementById("financeExpenseSheet");
+const financeReceiptInput=document.getElementById("financeReceiptInput");
+const financeReceiptForm=document.getElementById("financeReceiptForm");
+const financeExpenseForm=document.getElementById("financeExpenseForm");
+const receiptPreview=document.getElementById("receiptPreview");
+
+function financeDrafts(){
+  try{return JSON.parse(localStorage.getItem("oficina-finance-drafts")||"[]")}catch{return []}
+}
+function saveFinanceDrafts(rows){
+  localStorage.setItem("oficina-finance-drafts",JSON.stringify(rows));
+}
+function parseMoneyInput(value){
+  const normalized=String(value||"").trim().replace(/\./g,"").replace(",",".");
+  const number=Number(normalized);
+  return Number.isFinite(number)?number:0;
+}
+function renderFinance(){
+  const list=document.getElementById("financeList");
+  if(!list) return;
+  const base=[
+    {type:"income",title:"OS #000123",meta:"A receber · João da Silva",amount:720,status:"Aberto"},
+    {type:"expense",title:"Compra de peças",meta:"Auto Peças Centro · OS #000121",amount:316,status:"Pago"},
+    {type:"expense",title:"Frete fornecedor",meta:"Despesa vinculada · OS #000119",amount:120,status:"Aberto"}
+  ];
+  const drafts=financeDrafts().map(d=>({
+    type:d.type||"expense",
+    title:d.title||"Rascunho financeiro",
+    meta:d.meta||"Rascunho local",
+    amount:Number(d.amount||0),
+    status:"Rascunho",
+    receipt:d.receiptName||""
+  }));
+  list.innerHTML=[...drafts,...base].map(row=>
+    '<article class="finance-row '+row.type+'">'+
+      '<div class="finance-row-icon">'+(row.type==="income"?"↙":"↗")+'</div>'+
+      '<div class="finance-row-copy"><b>'+escapeHtml(row.title)+'</b><small>'+escapeHtml(row.meta)+(row.receipt?' · 📎 '+escapeHtml(row.receipt):'')+'</small></div>'+
+      '<div class="finance-row-value"><b>'+(row.type==="income"?"+ ":"- ")+moneyBR(row.amount)+'</b><small>'+escapeHtml(row.status)+'</small></div>'+
+    '</article>'
+  ).join("");
+}
+document.getElementById("financeReceiptShortcut")?.addEventListener("click",()=>openSheet(financeReceiptSheet));
+document.getElementById("financeExpenseShortcut")?.addEventListener("click",()=>openSheet(financeExpenseSheet));
+
+financeReceiptInput?.addEventListener("change",()=>{
+  const file=financeReceiptInput.files?.[0];
+  if(!file||!receiptPreview) return;
+  if(file.type.startsWith("image/")){
+    const url=URL.createObjectURL(file);
+    receiptPreview.innerHTML='<img src="'+url+'" alt="Prévia da notinha"><div><b>'+escapeHtml(file.name)+'</b><small>Toque para trocar o arquivo</small></div>';
+  }else{
+    receiptPreview.innerHTML='<span>📄</span><div><b>'+escapeHtml(file.name)+'</b><small>PDF selecionado</small></div>';
+  }
+});
+
+financeReceiptForm?.addEventListener("submit",event=>{
+  event.preventDefault();
+  const fd=new FormData(financeReceiptForm);
+  const file=financeReceiptInput?.files?.[0];
+  const rows=financeDrafts();
+  const supplier=String(fd.get("supplier")||"Fornecedor não informado").trim();
+  const amount=parseMoneyInput(fd.get("total"));
+  const order=String(fd.get("order")||"").trim();
+  rows.unshift({
+    id:Date.now(),
+    type:"expense",
+    title:"Compra · "+supplier,
+    meta:[order||"Sem OS vinculada","aguardando envio ao servidor"].join(" · "),
+    amount,
+    receiptName:file?.name||"",
+    receiptType:file?.type||"",
+    createdAt:new Date().toISOString()
+  });
+  saveFinanceDrafts(rows);
+  financeReceiptForm.reset();
+  if(receiptPreview) receiptPreview.innerHTML='<span>📷</span><b>Fotografar ou anexar</b><small>Imagem ou PDF da nota/comprovante</small>';
+  closeSheets();
+  renderFinance();
+  toast("Rascunho da compra salvo. O arquivo será enviado ao servidor após o login interno.");
+});
+
+financeExpenseForm?.addEventListener("submit",event=>{
+  event.preventDefault();
+  const fd=new FormData(financeExpenseForm);
+  const rows=financeDrafts();
+  const desc=String(fd.get("description")||"Despesa").trim();
+  const amount=parseMoneyInput(fd.get("amount"));
+  const order=String(fd.get("order")||"").trim();
+  rows.unshift({
+    id:Date.now(),
+    type:"expense",
+    title:desc,
+    meta:[String(fd.get("category")||"Despesa"),order||"Sem OS vinculada"].join(" · "),
+    amount,
+    createdAt:new Date().toISOString()
+  });
+  saveFinanceDrafts(rows);
+  financeExpenseForm.reset();
+  closeSheets();
+  renderFinance();
+  toast("Despesa registrada como rascunho local.");
+});
+
 document.getElementById("finishService").addEventListener("click",()=>{
   const pending=[...document.querySelectorAll(".task input")].filter(x=>!x.checked).length;
   if(pending){toast("Ainda existem "+pending+" tarefas pendentes.");return}
@@ -936,13 +1041,13 @@ const searchSheet=document.getElementById("searchSheet");
 
 function openSheet(sheet){
   if(!sheet) return;
-  [quickActionSheet,moreSheet,searchSheet].forEach(s=>{if(s && s!==sheet)s.hidden=true});
+  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet].forEach(s=>{if(s && s!==sheet)s.hidden=true});
   sheet.hidden=false;
   document.body.classList.add("sheet-open");
   document.body.classList.remove("no-scroll");
 }
 function closeSheets(){
-  [quickActionSheet,moreSheet,searchSheet].forEach(s=>{if(s)s.hidden=true});
+  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet].forEach(s=>{if(s)s.hidden=true});
   document.body.classList.remove("sheet-open");
   queueScrollLock();
 }
@@ -988,5 +1093,6 @@ window.addEventListener("keydown",e=>{if(e.key==="Escape")closeSheets()});
 renderDashboard();
 renderOrders();
 renderClients();
+renderFinance();
 updatePhotoProgress();
 renderApprovalState();
