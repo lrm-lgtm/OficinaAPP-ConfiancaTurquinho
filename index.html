@@ -7,7 +7,7 @@
   <meta name="description" content="Auto Mecânica Confiança — gestão de oficina">
   <title>Auto Mecânica Confiança</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=11.8">
+  <link rel="stylesheet" href="./styles.css?v=11.9">
 </head>
 <body>
   <header class="appbar">
@@ -46,13 +46,13 @@
       </div>
 
       <div class="stage-tabs" id="kanbanStageTabs" aria-label="Etapas da oficina">
-        <button class="active" data-stage-filter="today">Hoje</button>
-        <button data-stage-filter="entry">Entrada</button>
-        <button data-stage-filter="budget">Orçamento</button>
-        <button data-stage-filter="waiting_customer">Cliente</button>
-        <button data-stage-filter="waiting_parts">Peça</button>
-        <button data-stage-filter="service">Execução</button>
-        <button data-stage-filter="ready">Prontas</button>
+        <button class="active" data-stage-filter="today">Hoje <em id="stageCountToday">0</em></button>
+        <button data-stage-filter="entry">Entrada <em id="stageCountEntry">0</em></button>
+        <button data-stage-filter="budget">Orçamento <em id="stageCountBudget">0</em></button>
+        <button data-stage-filter="waiting_customer">Cliente <em id="stageCountCustomer">0</em></button>
+        <button data-stage-filter="waiting_parts">Peça <em id="stageCountParts">0</em></button>
+        <button data-stage-filter="service">Execução <em id="stageCountService">0</em></button>
+        <button data-stage-filter="ready">Prontas <em id="stageCountReady">0</em></button>
       </div>
 
       <div class="flow-panel">
@@ -465,6 +465,6 @@
 
   <div class="toast" id="toast"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./app.js?v=11.8"></script>
+  <script src="./app.js?v=11.9"></script>
 </body>
 </html>
