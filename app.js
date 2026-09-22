@@ -383,6 +383,19 @@ async function persistOrderToServer(fd,quick){
   return mapped||{id:order.id,ref:"#"+String(order.number).padStart(6,"0"),customer:customerName};
 }
 
+function kanbanOverrides(){
+  try{return JSON.parse(localStorage.getItem("oficina-kanban-overrides")||"{}")}catch{return {}}
+}
+function saveKanbanOverride(id,patch){
+  const all=kanbanOverrides();
+  all[String(id)]={...(all[String(id)]||{}),...patch,updatedAt:new Date().toISOString()};
+  localStorage.setItem("oficina-kanban-overrides",JSON.stringify(all));
+}
+function applyKanbanOverride(o){
+  const patch=kanbanOverrides()[String(o.id)];
+  return patch?{...o,...patch}:o;
+}
+
 function getDemoApproval(){
   try{
     const record=JSON.parse(localStorage.getItem("oficina-approval-000123")||"null");
@@ -403,7 +416,7 @@ function allOrders(){
     if(decision==="revision_requested"||decision==="revision") return {...o,status:"Revisão solicitada",kind:"waiting",stage:"Cliente solicitou revisão"};
     return o;
   });
-  return [...JSON.parse(localStorage.getItem("oficina-orders")||"[]"),...demo];
+  return [...JSON.parse(localStorage.getItem("oficina-orders")||"[]"),...demo].map(applyKanbanOverride);
 }
 
 function allClients(){
@@ -509,20 +522,23 @@ function kanbanCard(o){
   const reason=o.blockedReason
     ? '<div class="flow-reason">'+escapeHtml(o.blockedReason)+'</div>'
     : "";
-  return '<button class="flow-card" data-open-os="'+o.id+'">'+
-    '<div class="flow-card-main">'+
-      '<div class="flow-card-title"><b>'+escapeHtml(o.plate)+'</b><span>'+escapeHtml(o.ref)+'</span></div>'+
-      '<strong>'+escapeHtml(o.vehicle)+'</strong>'+
-      '<small>'+escapeHtml(o.stage)+'</small>'+
-    '</div>'+
-    '<span class="health-badge '+health.cls+'"><i>'+health.icon+'</i>'+health.label+'</span>'+
-    '<div class="flow-times">'+
-      '<span><em>Prazo cliente</em>'+escapeHtml(o.promised||"A definir")+'</span>'+
-      forecast+
-      '<span class="flow-owner"><em>Responsável</em>'+escapeHtml(o.owner||"Sem responsável")+'</span>'+
-    '</div>'+
-    reason+
-  '</button>';
+  return '<article class="flow-card">'+
+    '<button class="flow-card-open" data-open-os="'+o.id+'">'+
+      '<div class="flow-card-main">'+
+        '<div class="flow-card-title"><b>'+escapeHtml(o.plate)+'</b><span>'+escapeHtml(o.ref)+'</span></div>'+
+        '<strong>'+escapeHtml(o.vehicle)+'</strong>'+
+        '<small>'+escapeHtml(o.stage)+'</small>'+
+      '</div>'+
+      '<span class="health-badge '+health.cls+'"><i>'+health.icon+'</i>'+health.label+'</span>'+
+      '<div class="flow-times">'+
+        '<span><em>Prazo cliente</em>'+escapeHtml(o.promised||"A definir")+'</span>'+
+        forecast+
+        '<span class="flow-owner"><em>Responsável</em>'+escapeHtml(o.owner||"Sem responsável")+'</span>'+
+      '</div>'+
+      reason+
+    '</button>'+
+    '<button class="flow-quick-btn" type="button" data-quick-os="'+o.id+'" aria-label="Atualizar andamento">•••</button>'+
+  '</article>';
 }
 
 function filteredKanbanOrders(orders){
@@ -577,6 +593,10 @@ function renderKanban(orders){
     : '<div class="flow-empty"><b>Nada por aqui</b><span>Nenhuma OS nesta combinação de etapa e alerta.</span></div>';
 
   board.querySelectorAll("[data-open-os]").forEach(btn=>btn.onclick=()=>openDetail(btn.dataset.openOs));
+  board.querySelectorAll("[data-quick-os]").forEach(btn=>btn.onclick=event=>{
+    event.stopPropagation();
+    openOsQuickSheet(btn.dataset.quickOs);
+  });
 
   document.querySelectorAll("[data-stage-filter]").forEach(btn=>{
     btn.classList.toggle("active",btn.dataset.stageFilter===currentKanbanStage);
@@ -1519,6 +1539,153 @@ window.addEventListener("hashchange",()=>{
   else if(currentView==="client-approval") go("dashboard");
 });
 
+// ---- v11.7 quick operational updates ----
+const osQuickSheet=document.getElementById("osQuickSheet");
+const osQuickForm=document.getElementById("osQuickForm");
+let osQuickSelectedId=null;
+let osQuickSelectedState=null;
+
+function toLocalDateTimeInput(value){
+  if(!value) return "";
+  const d=new Date(value);
+  if(Number.isNaN(d.getTime())) return "";
+  const local=new Date(d.getTime()-d.getTimezoneOffset()*60000);
+  return local.toISOString().slice(0,16);
+}
+function demoIsoFromDisplay(value){
+  if(!value||value==="A definir") return null;
+  return null;
+}
+function setQuickState(state){
+  osQuickSelectedState=state;
+  document.querySelectorAll("[data-os-state]").forEach(btn=>btn.classList.toggle("selected",btn.dataset.osState===state));
+  const hint=document.getElementById("osQuickHint");
+  const messages={
+    active:"Retoma a OS e remove bloqueios ativos.",
+    waiting_parts:"Mantém a OS visível como aguardando peça. Informe o motivo/fornecedor.",
+    waiting_customer:"Mantém a OS visível enquanto depende de retorno do cliente.",
+    technical_difficulty:"Marca bloqueio técnico sem esconder a OS da gestão.",
+    ready:"Conclui a execução e move para Prontas."
+  };
+  if(hint) hint.textContent=messages[state]||"Escolha uma situação e salve.";
+}
+function openOsQuickSheet(id){
+  const order=allOrders().find(o=>String(o.id)===String(id));
+  if(!order) return;
+  osQuickSelectedId=order.id;
+  const raw=order.raw||{};
+  const operational=raw.operational_state||(
+    kanbanStage(order)==="waiting_parts"?"waiting_parts":
+    kanbanStage(order)==="waiting_customer"?"waiting_customer":
+    kanbanStage(order)==="ready"?"ready":"active"
+  );
+  setQuickState(operational);
+  document.getElementById("osQuickRef").textContent=order.ref+" · "+order.plate;
+  document.getElementById("osQuickTitle").textContent=order.customer;
+  document.getElementById("osQuickVehicle").textContent=order.vehicle;
+  document.getElementById("osQuickStage").textContent=order.stage;
+  document.getElementById("osQuickPromised").value=toLocalDateTimeInput(raw.customer_promised_at);
+  document.getElementById("osQuickForecast").value=toLocalDateTimeInput(raw.forecast_at);
+  document.getElementById("osQuickReason").value=order.blockedReason||"";
+  openSheet(osQuickSheet);
+}
+document.querySelectorAll("[data-os-state]").forEach(btn=>btn.addEventListener("click",()=>setQuickState(btn.dataset.osState)));
+
+async function saveOsQuickUpdate(){
+  const order=allOrders().find(o=>String(o.id)===String(osQuickSelectedId));
+  if(!order||!osQuickSelectedState) return;
+  const reason=document.getElementById("osQuickReason").value.trim();
+  const promisedValue=document.getElementById("osQuickPromised").value;
+  const forecastValue=document.getElementById("osQuickForecast").value;
+  const needsReason=["waiting_parts","waiting_customer","technical_difficulty"].includes(osQuickSelectedState);
+  if(needsReason&&!reason){
+    document.getElementById("osQuickReason").focus();
+    toast("Informe o motivo para esse bloqueio.");
+    return;
+  }
+
+  const now=new Date().toISOString();
+  if(order.server && staffProfile?.active && supabaseClient){
+    const raw=order.raw||{};
+    const patch={
+      operational_state:osQuickSelectedState==="ready"?"active":osQuickSelectedState,
+      blocked_since:needsReason?(raw.blocked_since||now):null,
+      blocked_reason:needsReason?reason:null
+    };
+    if(promisedValue) patch.customer_promised_at=new Date(promisedValue).toISOString();
+    if(forecastValue) patch.forecast_at=new Date(forecastValue).toISOString();
+    if(osQuickSelectedState==="ready") patch.status="ready";
+    else if(osQuickSelectedState==="active" && raw.status==="ready") patch.status="in_service";
+
+    const saveBtn=document.getElementById("osQuickSave");
+    saveBtn.disabled=true;
+    try{
+      const {error}=await supabaseClient.from("work_orders").update(patch).eq("id",order.id);
+      if(error) throw error;
+      await supabaseClient.from("activity_log").insert({
+        work_order_id:order.id,
+        actor_user_id:staffSession?.user?.id||null,
+        actor_type:"user",
+        event_type:"work_order_operational_updated",
+        payload:{
+          operational_state:patch.operational_state,
+          status:patch.status||raw.status||null,
+          customer_promised_at:patch.customer_promised_at||raw.customer_promised_at||null,
+          forecast_at:patch.forecast_at||raw.forecast_at||null,
+          reason:patch.blocked_reason
+        }
+      });
+      await syncServerData({quiet:true});
+      closeSheets();
+      renderDashboard();
+      toast("Andamento atualizado no servidor.");
+    }catch(error){
+      toast("Não foi possível atualizar a OS.");
+    }finally{
+      saveBtn.disabled=false;
+    }
+    return;
+  }
+
+  const stageMap={
+    active:"Em execução",
+    waiting_parts:"Aguardando peça",
+    waiting_customer:"Aguardando cliente",
+    technical_difficulty:"Bloqueada",
+    ready:"Aguardando retirada"
+  };
+  const statusMap={
+    active:"Em execução",
+    waiting_parts:"Aguardando",
+    waiting_customer:"Aguardando",
+    technical_difficulty:"Aguardando",
+    ready:"Pronta"
+  };
+  const healthMap={
+    active:"on_track",
+    waiting_parts:"waiting_parts",
+    waiting_customer:"waiting_customer",
+    technical_difficulty:"blocked",
+    ready:"done"
+  };
+  const patch={
+    stage:stageMap[osQuickSelectedState],
+    status:statusMap[osQuickSelectedState],
+    kind:osQuickSelectedState==="ready"?"ready":osQuickSelectedState==="active"?"service":"waiting",
+    health:healthMap[osQuickSelectedState],
+    blockedReason:needsReason?reason:"",
+    promised:promisedValue?shortDateTime(new Date(promisedValue).toISOString()):order.promised,
+    forecast:forecastValue?shortDateTime(new Date(forecastValue).toISOString()):order.forecast
+  };
+  saveKanbanOverride(order.id,patch);
+  closeSheets();
+  renderDashboard();
+  renderOrders();
+  toast("Andamento atualizado nesta demonstração.");
+}
+
+osQuickForm?.addEventListener("submit",event=>{event.preventDefault();saveOsQuickUpdate()});
+
 // ---- viewport-fit scroll lock ----
 let scrollLockRaf=0;
 function syncScrollLock(){
@@ -1555,13 +1722,13 @@ const staffAuthSheet=document.getElementById("staffAuthSheet");
 
 function openSheet(sheet){
   if(!sheet) return;
-  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,staffAuthSheet,pixPaymentSheet].forEach(s=>{if(s && s!==sheet)s.hidden=true});
+  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,staffAuthSheet,pixPaymentSheet,osQuickSheet].forEach(s=>{if(s && s!==sheet)s.hidden=true});
   sheet.hidden=false;
   document.body.classList.add("sheet-open");
   document.body.classList.remove("no-scroll");
 }
 function closeSheets(){
-  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,staffAuthSheet,pixPaymentSheet].forEach(s=>{if(s)s.hidden=true});
+  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,staffAuthSheet,pixPaymentSheet,osQuickSheet].forEach(s=>{if(s)s.hidden=true});
   document.body.classList.remove("sheet-open");
   queueScrollLock();
 }
