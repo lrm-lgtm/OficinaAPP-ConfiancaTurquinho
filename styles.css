@@ -1591,3 +1591,104 @@ body.no-scroll .os-global-actions{
   .health-strip span{font-size:6.6px}
   .flow-times{grid-template-columns:1fr 1fr auto}
 }
+
+
+/* ===== v11.7 quick operational actions ===== */
+.flow-card{
+  position:relative;
+  display:block!important;
+  padding:0!important;
+  overflow:hidden;
+}
+.flow-card-open{
+  width:100%;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:7px 8px;
+  padding:10px 42px 10px 10px;
+  border:0;
+  background:transparent;
+  color:#fff;
+  text-align:left;
+}
+.flow-quick-btn{
+  position:absolute;
+  top:8px;
+  right:7px;
+  width:30px;
+  height:30px;
+  border:1px solid #353d42;
+  border-radius:9px;
+  background:#20262a;
+  color:#aeb6bb;
+  font-size:12px;
+  font-weight:900;
+  letter-spacing:1px;
+}
+.flow-quick-btn:active{transform:scale(.96)}
+.os-quick-sheet-card{max-height:88vh;overflow:auto}
+.os-quick-current{
+  padding:9px 10px;
+  margin-bottom:9px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:#111518;
+}
+.os-quick-current b,.os-quick-current small{display:block}
+.os-quick-current b{font-size:11px}
+.os-quick-current small{margin-top:2px;color:var(--muted);font-size:8px}
+.os-state-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:6px;
+  margin-bottom:10px;
+}
+.os-state-grid button{
+  min-height:48px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:8px 9px;
+  border:1px solid #30373d;
+  border-radius:11px;
+  background:#15191c;
+  color:#d6dce0;
+  text-align:left;
+}
+.os-state-grid button span{
+  display:grid;
+  place-items:center;
+  width:26px;
+  height:26px;
+  flex:none;
+  border-radius:8px;
+  background:#23292d;
+  font-size:12px;
+}
+.os-state-grid button b{font-size:8.5px;line-height:1.2}
+.os-state-grid button.selected{
+  border-color:#f04b3d;
+  background:#241514;
+  box-shadow:inset 0 0 0 1px rgba(240,75,61,.18);
+}
+.os-state-grid button.selected span{
+  background:#e63b2f;
+  color:#fff;
+}
+.os-state-grid .ready-action{
+  grid-column:1 / -1;
+}
+.os-state-grid .ready-action.selected{
+  border-color:#3f9868;
+  background:#12251b;
+}
+.os-state-grid .ready-action.selected span{background:#2b9d62}
+.quick-state-hint{
+  margin:2px 0 9px;
+  padding:8px 9px;
+  border-radius:9px;
+  background:#101417;
+  color:#8f989e;
+  font-size:8px;
+  line-height:1.35;
+}
