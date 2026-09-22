@@ -51,6 +51,9 @@ Entidades mínimas:
 6. Perfil mecânico não recebe informação financeira sem permissão explícita.
 7. Operações sensíveis geram auditoria com usuário, data, entidade, ação e contexto.
 8. Toda entidade de negócio usa autorização por objeto, não apenas autorização de tela.
+9. A abertura rápida de uma OS exige somente o nome do cliente; placa, veículo, quilometragem e relato podem ser completados depois.
+10. A vistoria inicial exige quatro fotos para ser concluída: frente, traseira, lateral esquerda e lateral direita.
+11. A foto do painel/quilometragem é a quinta evidência prevista, porém opcional.
 
 ## Fluxo
 
