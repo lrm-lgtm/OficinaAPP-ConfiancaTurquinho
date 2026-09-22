@@ -25,6 +25,10 @@ let staffSession=null;
 let staffProfile=null;
 let remoteBudgetState=null;
 let remoteApprovalState=null;
+let serverOrders=[];
+let serverClients=[];
+let serverDataReady=false;
+let serverSyncing=false;
 
 function staffRoleLabel(role){
   return ({owner:"Proprietário",manager:"Gerente",reception:"Recepção",mechanic:"Mecânico",finance:"Financeiro"})[role]||role||"Sem perfil";
@@ -78,6 +82,13 @@ async function refreshStaffSession(message=""){
     staffProfile=data||null;
   }
   renderStaffAuthState(message);
+  if(staffProfile?.active){
+    await syncServerData({quiet:true});
+  }else{
+    serverDataReady=false;
+    serverOrders=[];
+    serverClients=[];
+  }
 }
 async function staffLogin(){
   if(!supabaseClient) return toast("Acesso ao servidor indisponível.");
@@ -162,6 +173,213 @@ function statusBadge(status){
   return '<span class="status '+cls+'">'+status+"</span>";
 }
 
+function serverStatusLabel(status){
+  return ({
+    open:"Aberta",
+    inspection:"Vistoria",
+    budget:"Em orçamento",
+    waiting_approval:"Aguardando",
+    approved:"Aprovado",
+    in_service:"Em execução",
+    ready:"Pronta",
+    delivered:"Entregue",
+    cancelled:"Cancelada"
+  })[status]||status||"Aberta";
+}
+function serverStageLabel(row){
+  if(row.status==="waiting_approval") return "Aguardando aprovação";
+  if(row.status==="approved") return "Liberado para execução";
+  if(row.status==="in_service") return "Em execução";
+  if(row.status==="ready") return "Aguardando retirada";
+  if(row.operational_state==="waiting_parts") return "Aguardando peça";
+  if(row.operational_state==="waiting_customer") return "Aguardando cliente";
+  if(["third_party","technical_difficulty","other"].includes(row.operational_state)) return "Bloqueada";
+  if(row.status==="budget") return "Orçamento";
+  if(row.status==="inspection") return "Vistoria";
+  return "Entrada / diagnóstico";
+}
+function serverHealth(row){
+  if(["ready","delivered","cancelled"].includes(row.status)) return "done";
+  if(row.operational_state==="waiting_parts") return "waiting_parts";
+  if(row.operational_state==="waiting_customer") return "waiting_customer";
+  if(["third_party","technical_difficulty","other"].includes(row.operational_state)) return "blocked";
+  if(row.customer_promised_at){
+    const deadline=new Date(row.customer_promised_at).getTime();
+    const now=Date.now();
+    if(deadline<now) return "overdue";
+    if(deadline-now<=6*60*60*1000) return "attention";
+  }
+  return "on_track";
+}
+function shortDateTime(value){
+  if(!value) return "A definir";
+  try{
+    return new Intl.DateTimeFormat("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}).format(new Date(value));
+  }catch{return "A definir"}
+}
+function mapServerOrder(row){
+  const customer=row.customers||{};
+  const vehicle=row.vehicles||{};
+  const vehicleText=[vehicle.make,vehicle.model,vehicle.version].filter(Boolean).join(" ")||"Veículo a completar";
+  const kind=row.status==="ready"?"ready":["approved","in_service"].includes(row.status)?"service":"waiting";
+  return {
+    id:row.id,
+    server:true,
+    customerId:row.customer_id,
+    vehicleId:row.vehicle_id,
+    ref:"#"+String(row.number||"—").padStart(6,"0"),
+    plate:vehicle.plate||"SEM PLACA",
+    vehicle:vehicleText,
+    customer:customer.name||"Cliente",
+    status:serverStatusLabel(row.status),
+    kind,
+    opened:shortDateTime(row.created_at),
+    stage:serverStageLabel(row),
+    complaint:row.complaint||"Sem relato inicial",
+    health:serverHealth(row),
+    promised:shortDateTime(row.customer_promised_at),
+    owner:"Equipe",
+    blockedReason:row.blocked_reason||"",
+    raw:row
+  };
+}
+async function syncServerData({quiet=false}={}){
+  if(!supabaseClient||!staffProfile?.active||serverSyncing) return false;
+  serverSyncing=true;
+  try{
+    const {data:rows,error}=await supabaseClient
+      .from("work_orders")
+      .select("id,number,customer_id,vehicle_id,status,complaint,current_km,created_at,customer_promised_at,forecast_at,operational_state,blocked_reason,priority,customers(id,name,phone),vehicles(id,plate,make,model,version,year,km)")
+      .order("created_at",{ascending:false});
+    if(error) throw error;
+    serverOrders=(rows||[]).map(mapServerOrder);
+
+    const {data:customers,error:customerError}=await supabaseClient
+      .from("customers")
+      .select("id,name,phone")
+      .order("name",{ascending:true});
+    if(customerError) throw customerError;
+    serverClients=(customers||[]).map(c=>{
+      const related=serverOrders.filter(o=>String(o.customerId)===String(c.id));
+      const first=related.find(o=>o.vehicle&&o.vehicle!=="Veículo a completar");
+      return {
+        id:c.id,
+        name:c.name,
+        phone:c.phone||"—",
+        vehicle:first?first.vehicle+" · "+first.plate:"Sem veículo vinculado",
+        orders:related.length,
+        server:true
+      };
+    });
+    serverDataReady=true;
+    renderDashboard();
+    renderOrders();
+    renderClients();
+    if(!quiet) toast("Dados sincronizados com o servidor.");
+    return true;
+  }catch(error){
+    serverDataReady=false;
+    if(!quiet) toast("Não foi possível sincronizar os dados internos.");
+    return false;
+  }finally{
+    serverSyncing=false;
+  }
+}
+async function findOrCreateServerCustomer(name,phone=""){
+  const {data:existing}=await supabaseClient.from("customers").select("id,name,phone").ilike("name",name).limit(1).maybeSingle();
+  if(existing) return existing;
+  const {data,error}=await supabaseClient.from("customers").insert({name,phone:phone||null}).select("id,name,phone").single();
+  if(error) throw error;
+  return data;
+}
+async function findOrCreateServerVehicle(customerId,fd){
+  const plate=String(fd.get("plate")||"").trim().toUpperCase();
+  const vehicleText=String(fd.get("vehicle")||"").trim();
+  const yearRaw=parseInt(String(fd.get("year")||"").replace(/\D/g,""),10);
+  const kmRaw=parseInt(String(fd.get("km")||"").replace(/\D/g,""),10);
+
+  if(plate){
+    const {data:existing}=await supabaseClient.from("vehicles").select("id,customer_id,plate,make,model,version,year,km").eq("plate",plate).maybeSingle();
+    if(existing) return existing;
+  }
+  if(!plate && !vehicleText) return null;
+  const {data,error}=await supabaseClient.from("vehicles").insert({
+    customer_id:customerId,
+    plate:plate||null,
+    model:vehicleText||null,
+    year:Number.isFinite(yearRaw)?yearRaw:null,
+    km:Number.isFinite(kmRaw)?kmRaw:null
+  }).select("id,customer_id,plate,make,model,version,year,km").single();
+  if(error) throw error;
+  return data;
+}
+async function uploadInspectionPhotos(workOrderId){
+  const rows=[];
+  for(const card of document.querySelectorAll(".capture-card")){
+    const input=card.querySelector("input");
+    const file=input?.files?.[0];
+    if(!file) continue;
+    const slot=card.dataset.slot||"other";
+    const ext=(file.name.split(".").pop()||"jpg").toLowerCase().replace(/[^a-z0-9]/g,"")||"jpg";
+    const path=workOrderId+"/entry/"+slot+"-"+crypto.randomUUID()+"."+ext;
+    const {error:uploadError}=await supabaseClient.storage.from("oficina-evidence").upload(path,file,{contentType:file.type||"image/jpeg",upsert:false});
+    if(uploadError) throw uploadError;
+    rows.push({
+      work_order_id:workOrderId,
+      phase:"entry",
+      slot,
+      storage_path:path,
+      required:card.classList.contains("required")
+    });
+  }
+  if(rows.length){
+    const {error}=await supabaseClient.from("inspection_photos").insert(rows);
+    if(error) throw error;
+  }
+}
+async function persistOrderToServer(fd,quick){
+  const customerName=String(fd.get("customer")||"").trim();
+  const customer=await findOrCreateServerCustomer(customerName);
+  const vehicle=await findOrCreateServerVehicle(customer.id,fd);
+  const kmRaw=parseInt(String(fd.get("km")||"").replace(/\D/g,""),10);
+  const complaint=String(fd.get("complaint")||"").trim()||"Sem relato inicial";
+
+  const {data:order,error}=await supabaseClient.from("work_orders").insert({
+    customer_id:customer.id,
+    vehicle_id:vehicle?.id||null,
+    status:quick?"open":"budget",
+    complaint,
+    current_km:Number.isFinite(kmRaw)?kmRaw:null,
+    created_by:staffSession?.user?.id||null,
+    operational_state:"active"
+  }).select("id,number").single();
+  if(error) throw error;
+
+  if(!quick){
+    await uploadInspectionPhotos(order.id);
+    await supabaseClient.from("budget_revisions").insert({
+      work_order_id:order.id,
+      revision:1,
+      status:"draft",
+      subtotal:0,
+      total:0,
+      created_by:staffSession?.user?.id||null
+    });
+  }
+  await supabaseClient.from("activity_log").insert({
+    work_order_id:order.id,
+    actor_user_id:staffSession?.user?.id||null,
+    actor_type:"user",
+    event_type:quick?"work_order_quick_created":"work_order_created",
+    payload:{source:"pwa_v11_5",inspection:!quick}
+  });
+
+  await syncServerData({quiet:true});
+  const mapped=serverOrders.find(o=>String(o.id)===String(order.id));
+  toast(quick?"OS rápida salva no servidor.":"OS e vistoria salvas no servidor.");
+  return mapped||{id:order.id,ref:"#"+String(order.number).padStart(6,"0"),customer:customerName};
+}
+
 function getDemoApproval(){
   try{
     const record=JSON.parse(localStorage.getItem("oficina-approval-000123")||"null");
@@ -173,6 +391,7 @@ function getDemoApproval(){
   }catch{return null}
 }
 function allOrders(){
+  if(staffProfile?.active && serverDataReady) return serverOrders;
   const approval=remoteApprovalState||getDemoApproval();
   const demo=demoOrders.map(o=>{
     if(o.id!==34 || !approval) return o;
@@ -185,6 +404,7 @@ function allOrders(){
 }
 
 function allClients(){
+  if(staffProfile?.active && serverDataReady) return serverClients;
   return [...JSON.parse(localStorage.getItem("oficina-clients")||"[]"),...demoClients];
 }
 
@@ -207,9 +427,9 @@ function orderCard(o){
 }
 
 function bindOrderOpeners(){
-  document.querySelectorAll("[data-open-os]").forEach(btn=>btn.onclick=()=>openDetail(Number(btn.dataset.openOs)));
+  document.querySelectorAll("[data-open-os]").forEach(btn=>btn.onclick=()=>openDetail(btn.dataset.openOs));
   document.querySelectorAll("[data-order-action]").forEach(btn=>btn.onclick=()=>{
-    const o=allOrders().find(x=>x.id===Number(btn.dataset.orderAction));
+    const o=allOrders().find(x=>String(x.id)===String(btn.dataset.orderAction));
     if(!o) return;
     if(/aprovação|orçamento/i.test(o.stage+" "+o.status)) go("budget");
     else openDetail(o.id);
@@ -276,7 +496,7 @@ function renderKanban(orders){
   if(blocked) blocked.textContent=count("blocked","waiting_parts","waiting_customer");
   if(ready) ready.textContent=count("done");
 
-  board.querySelectorAll("[data-open-os]").forEach(btn=>btn.onclick=()=>openDetail(Number(btn.dataset.openOs)));
+  board.querySelectorAll("[data-open-os]").forEach(btn=>btn.onclick=()=>openDetail(btn.dataset.openOs));
   document.querySelectorAll("[data-kanban-target]").forEach(btn=>btn.onclick=()=>{
     const target=btn.dataset.kanbanTarget;
     const column=target==="blocked"
@@ -352,11 +572,24 @@ const modal=document.getElementById("clientModal");
 document.getElementById("newClientBtn").addEventListener("click",()=>modal.hidden=false);
 document.querySelector("[data-close-modal]").addEventListener("click",()=>modal.hidden=true);
 modal.addEventListener("click",e=>{if(e.target===modal)modal.hidden=true});
-document.getElementById("clientForm").addEventListener("submit",e=>{
+document.getElementById("clientForm").addEventListener("submit",async e=>{
   e.preventDefault();
   const fd=new FormData(e.currentTarget);
+  const name=String(fd.get("name")).trim();
+  const phone=String(fd.get("phone")||"").trim();
+  if(staffProfile?.active && supabaseClient){
+    try{
+      await supabaseClient.from("customers").insert({name,phone:phone||null});
+      await syncServerData({quiet:true});
+      e.currentTarget.reset();modal.hidden=true;renderClients();toast("Cliente salvo no servidor.");
+      return;
+    }catch(error){
+      toast("Não foi possível salvar o cliente no servidor.");
+      return;
+    }
+  }
   const saved=JSON.parse(localStorage.getItem("oficina-clients")||"[]");
-  saved.unshift({id:Date.now(),name:String(fd.get("name")).trim(),phone:String(fd.get("phone")||"—"),vehicle:"Sem veículo vinculado",orders:0});
+  saved.unshift({id:Date.now(),name,phone:phone||"—",vehicle:"Sem veículo vinculado",orders:0});
   localStorage.setItem("oficina-clients",JSON.stringify(saved));
   e.currentTarget.reset();modal.hidden=true;renderClients();toast("Cliente cadastrado nesta demo.");
 });
@@ -477,10 +710,11 @@ if(initialReportVoice){
   }
 }
 
-document.getElementById("quickCreate").addEventListener("click",()=>{
+document.getElementById("quickCreate").addEventListener("click",async()=>{
   if(!customerValid()) return;
   const fd=new FormData(wizard);
-  createOrder(fd,true);
+  const order=await createOrder(fd,true);
+  if(order && staffProfile?.active){resetWizard();openDetail(order.id)}
 });
 
 document.querySelectorAll(".capture-card input").forEach(input=>input.addEventListener("change",()=>{
@@ -525,18 +759,33 @@ function renderWizardSummary(){
     '<div><dt>Fotos da vistoria</dt><dd>4 obrigatórias'+panel+'</dd></div>';
 }
 
-wizard.addEventListener("submit",e=>{
+wizard.addEventListener("submit",async e=>{
   e.preventDefault();
   if(!customerValid())return;
   if(requiredPhotos.size!==4){setWizardStep(3);toast("As quatro fotos são obrigatórias para concluir a entrada.");return}
   const fd=new FormData(wizard);
-  const order=createOrder(fd,false);
   const goBudget=document.getElementById("goBudgetAfterCreate").checked;
-  resetWizard();
-  if(goBudget)go("budget"); else openDetail(order.id);
+  const submitBtn=e.submitter;
+  if(submitBtn) submitBtn.disabled=true;
+  try{
+    const order=await createOrder(fd,false);
+    if(!order) return;
+    resetWizard();
+    if(goBudget)go("budget"); else openDetail(order.id);
+  }finally{
+    if(submitBtn) submitBtn.disabled=false;
+  }
 });
 
-function createOrder(fd,quick){
+async function createOrder(fd,quick){
+  if(staffProfile?.active && supabaseClient){
+    try{
+      return await persistOrderToServer(fd,quick);
+    }catch(error){
+      toast("Falha ao salvar OS no servidor. Nada foi perdido no formulário.");
+      return null;
+    }
+  }
   const saved=JSON.parse(localStorage.getItem("oficina-orders")||"[]");
   const id=Date.now();
   const order={
@@ -576,7 +825,7 @@ function budgetActionLabel(o){
 }
 
 function openDetail(id){
-  const o=allOrders().find(x=>x.id===id)||demoOrders[0];
+  const o=allOrders().find(x=>String(x.id)===String(id))||demoOrders[0];
   const inspected=!o.quick;
   const detail=document.getElementById("osDetail");
   detail.innerHTML=
