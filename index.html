@@ -7,7 +7,7 @@
   <meta name="description" content="Auto Mecânica Confiança — gestão de oficina">
   <title>Auto Mecânica Confiança</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=11.0.1">
+  <link rel="stylesheet" href="./styles.css?v=11.1">
 </head>
 <body>
   <header class="appbar">
@@ -32,11 +32,17 @@
         <button class="stat-chip service" data-go="mechanic"><strong id="serviceCount">3</strong><span>Execução</span></button>
       </div>
 
-      <div class="section-head compact"><h2>Precisa de atenção</h2><button data-filter-jump="waiting">Ver fila</button></div>
-      <div class="attention-strip" id="attentionList"></div>
-
-      <div class="section-head compact"><h2>Em andamento</h2><button data-go="orders">Todas</button></div>
-      <div class="compact-order-list" id="dashboardOrders"></div>
+      <div class="section-head compact kanban-head">
+        <div><h2>Quadro da oficina</h2><small>Prazo, bloqueios e andamento</small></div>
+        <button data-go="orders">Lista</button>
+      </div>
+      <div class="kanban-kpis" id="kanbanKpis">
+        <button data-kanban-target="overdue"><strong id="kanbanOverdueCount">0</strong><span>Atrasadas</span></button>
+        <button data-kanban-target="attention"><strong id="kanbanAttentionCount">0</strong><span>Atenção</span></button>
+        <button data-kanban-target="blocked"><strong id="kanbanBlockedCount">0</strong><span>Bloqueadas</span></button>
+        <button data-kanban-target="done"><strong id="kanbanReadyCount">0</strong><span>Prontas</span></button>
+      </div>
+      <div class="kanban-board" id="kanbanBoard" aria-label="Kanban da oficina"></div>
     </section>
 
     <section class="view" data-view="orders">
@@ -221,6 +227,15 @@
         <article class="stock-card"><div><b>Filtro óleo Toyota</b><small>FO-TYO-02 · reservado: 0</small></div><strong>12 <small>un</small></strong></article>
       </div>
     </section>
+
+    <section class="view internal-only" data-view="finance">
+      <div class="page-title"><div><span>Interno</span><h1>Financeiro</h1></div><span class="status open">v11.2</span></div>
+      <div class="finance-placeholder">
+        <b>Custos, compras e recebimentos</b>
+        <p>Esta área é interna e nunca é enviada para o link público do cliente.</p>
+        <button class="btn primary full" type="button" id="financeReceiptShortcut">📷 Fotografar notinha</button>
+      </div>
+    </section>
   </main>
 
   <nav class="bottomnav" aria-label="Navegação principal">
@@ -260,6 +275,7 @@
       <h2>Mais</h2>
       <button class="sheet-action" data-sheet-go="mechanic"><span>🔧</span><div><b>Área do mecânico</b><small>Minhas OS e execução</small></div></button>
       <button class="sheet-action" data-sheet-go="stock"><span>▦</span><div><b>Estoque</b><small>Peças e reservas</small></div></button>
+      <button class="sheet-action" data-sheet-go="finance"><span>R$</span><div><b>Financeiro</b><small>Custos internos e recebimentos</small></div></button>
       <button class="sheet-action" data-sheet-go="client-approval"><span>✓</span><div><b>Aprovação demo</b><small>Visualizar página do cliente</small></div></button>
     </div>
   </div>
@@ -275,6 +291,6 @@
   </div>
 
   <div class="toast" id="toast"></div>
-  <script src="./app.js?v=11.0.1"></script>
+  <script src="./app.js?v=11.1"></script>
 </body>
 </html>
