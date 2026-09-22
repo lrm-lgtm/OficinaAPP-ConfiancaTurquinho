@@ -711,3 +711,87 @@ body.sheet-open.no-scroll{
 body.no-scroll .os-global-actions{
   position:static;
 }
+
+
+/* ===== v10.4 handwritten approval signature ===== */
+.signature-block{
+  position:relative;
+  margin:10px 0 12px;
+  border:1px solid var(--line);
+  border-radius:16px;
+  background:#101316;
+  overflow:hidden;
+}
+.signature-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:11px 12px;
+  border-bottom:1px solid var(--line);
+}
+.signature-head b,.signature-head small{display:block}
+.signature-head b{font-size:12px}
+.signature-head small{font-size:9px;color:var(--muted);margin-top:2px}
+.signature-head button{
+  border:0;
+  border-radius:9px;
+  background:#22282d;
+  color:#d4d9dc;
+  padding:7px 9px;
+  font-size:9px;
+  font-weight:900;
+}
+.signature-canvas{
+  display:block;
+  width:100%;
+  height:150px;
+  touch-action:none;
+  background:#f7f5ef;
+  cursor:crosshair;
+}
+.signature-placeholder{
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:56px;
+  text-align:center;
+  color:#818181;
+  font-size:13px;
+  font-style:italic;
+  pointer-events:none;
+}
+.signature-block.signed .signature-placeholder{display:none}
+.approval-consent{
+  display:flex;
+  gap:10px;
+  align-items:flex-start;
+  padding:11px 12px;
+  margin:0 0 10px;
+  border:1px solid var(--line);
+  border-radius:13px;
+  background:#15191c;
+  color:#d7dcdf;
+  font-size:10px;
+  line-height:1.45;
+}
+.approval-consent input{
+  width:18px;
+  height:18px;
+  margin:0;
+  accent-color:#20a761;
+  flex:none;
+}
+.signature-receipt{
+  margin-top:9px;
+  padding:10px;
+  border-radius:12px;
+  background:#f7f5ef;
+  border:1px solid rgba(255,255,255,.08);
+}
+.signature-receipt img{
+  display:block;
+  width:100%;
+  height:72px;
+  object-fit:contain;
+}
