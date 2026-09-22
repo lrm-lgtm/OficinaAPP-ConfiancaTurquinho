@@ -1350,3 +1350,244 @@ body.no-scroll .os-global-actions{
   font-size:8px;
   resize:none;
 }
+
+
+/* ===== v11.6 mobile workshop flow board ===== */
+.health-strip{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:6px;
+  margin:0 0 8px;
+}
+.health-strip button{
+  min-width:0;
+  min-height:43px;
+  display:grid;
+  grid-template-columns:6px auto;
+  grid-template-rows:auto auto;
+  column-gap:5px;
+  align-content:center;
+  justify-content:center;
+  padding:6px 4px;
+  border:1px solid var(--line);
+  border-radius:11px;
+  background:#14181b;
+  color:#fff;
+}
+.health-strip button i{
+  grid-row:1 / 3;
+  align-self:center;
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  background:#7b858c;
+}
+.health-strip button:nth-child(1) i{background:#f05445}
+.health-strip button:nth-child(2) i{background:#e2a73a}
+.health-strip button:nth-child(3) i{background:#8f79df}
+.health-strip button:nth-child(4) i{background:#4bc883}
+.health-strip strong{
+  font-size:14px;
+  line-height:1;
+  text-align:left;
+}
+.health-strip span{
+  margin-top:2px;
+  color:var(--muted);
+  font-size:7px;
+  text-align:left;
+  white-space:nowrap;
+}
+.health-strip button.active{
+  border-color:#59636b;
+  background:#20262a;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.04);
+}
+.stage-tabs{
+  display:flex;
+  gap:6px;
+  overflow-x:auto;
+  padding:1px 0 8px;
+  margin:0;
+  scrollbar-width:none;
+}
+.stage-tabs::-webkit-scrollbar{display:none}
+.stage-tabs button{
+  flex:0 0 auto;
+  min-height:33px;
+  padding:0 11px;
+  border:1px solid #2d3439;
+  border-radius:999px;
+  background:#121619;
+  color:#929ca3;
+  font-size:8px;
+  font-weight:900;
+  white-space:nowrap;
+}
+.stage-tabs button.active{
+  background:#f13d2f;
+  border-color:#f13d2f;
+  color:#fff;
+  box-shadow:0 5px 14px rgba(241,61,47,.18);
+}
+.flow-panel{
+  border:1px solid var(--line);
+  border-radius:15px;
+  background:#0f1214;
+  overflow:hidden;
+}
+.flow-panel-head{
+  min-height:47px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:9px 11px;
+  border-bottom:1px solid var(--line);
+  background:#15191c;
+}
+.flow-panel-head b,.flow-panel-head small{display:block}
+.flow-panel-head b{font-size:11px}
+.flow-panel-head small{
+  margin-top:2px;
+  color:#7f898f;
+  font-size:7.5px;
+}
+.flow-panel-head>span{
+  flex:none;
+  padding:4px 7px;
+  border-radius:999px;
+  background:#252b30;
+  color:#bcc4c9;
+  font-size:7px;
+  font-weight:900;
+}
+.flow-list{
+  display:grid;
+  gap:7px;
+  padding:8px;
+}
+.flow-card{
+  position:relative;
+  width:100%;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:7px 8px;
+  padding:10px;
+  border:1px solid #2b3238;
+  border-radius:12px;
+  background:#171b1e;
+  color:#fff;
+  text-align:left;
+}
+.flow-card-main{min-width:0}
+.flow-card-title{
+  display:flex;
+  align-items:center;
+  gap:7px;
+}
+.flow-card-title b{
+  font-size:13px;
+  letter-spacing:.3px;
+}
+.flow-card-title span{
+  color:#737d84;
+  font-size:7px;
+}
+.flow-card-main>strong{
+  display:block;
+  margin-top:3px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:10.5px;
+}
+.flow-card-main>small{
+  display:block;
+  margin-top:2px;
+  color:#a3abb1;
+  font-size:8px;
+}
+.health-badge{
+  align-self:start;
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  min-height:23px;
+  padding:4px 7px;
+  border-radius:999px;
+  border:1px solid #343b40;
+  background:#23282c;
+  color:#c8ced2;
+  font-size:7px;
+  font-weight:900;
+  white-space:nowrap;
+}
+.health-badge i{font-style:normal;font-size:7px}
+.health-badge.danger{background:#321614;border-color:#6a2c27;color:#ff8d83}
+.health-badge.warning{background:#30240e;border-color:#604a1b;color:#efc15f}
+.health-badge.parts{background:#30270f;border-color:#5a4b20;color:#e2c46b}
+.health-badge.customer{background:#211a35;border-color:#483a70;color:#b9a5ef}
+.health-badge.blocked{background:#26262a;border-color:#505057;color:#c9c9cf}
+.health-badge.ready{background:#123020;border-color:#285f42;color:#6bdd9d}
+.health-badge.track{background:#122733;border-color:#2d5165;color:#85c7e9}
+.flow-times{
+  grid-column:1 / -1;
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:6px;
+  padding-top:7px;
+  border-top:1px solid #292f34;
+}
+.flow-times span{
+  min-width:0;
+  color:#c2c8cc;
+  font-size:8px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.flow-times em{
+  display:block;
+  margin-bottom:2px;
+  color:#69747b;
+  font-size:6.5px;
+  font-style:normal;
+  text-transform:uppercase;
+  letter-spacing:.3px;
+}
+.flow-owner{text-align:right}
+.flow-reason{
+  grid-column:1 / -1;
+  padding:6px 7px;
+  border-radius:8px;
+  background:#251f11;
+  color:#d6bc72;
+  font-size:7.5px;
+  line-height:1.3;
+}
+.flow-empty{
+  display:grid;
+  place-items:center;
+  min-height:112px;
+  padding:18px;
+  text-align:center;
+}
+.flow-empty b{font-size:11px}
+.flow-empty span{margin-top:3px;color:#737d84;font-size:8px}
+#kanbanBoard.kanban-board{
+  display:grid;
+  overflow:visible;
+  padding:8px;
+  margin:0;
+  scroll-snap-type:none;
+}
+.kanban-column{display:none!important}
+
+@media(max-width:430px){
+  .health-strip{gap:5px}
+  .health-strip button{padding:5px 3px}
+  .health-strip strong{font-size:13px}
+  .health-strip span{font-size:6.6px}
+  .flow-times{grid-template-columns:1fr 1fr auto}
+}
