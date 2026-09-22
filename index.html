@@ -7,23 +7,20 @@
   <meta name="description" content="Auto Mecânica Confiança — gestão de oficina">
   <title>Auto Mecânica Confiança</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=7">
+  <link rel="stylesheet" href="./styles.css?v=9">
 </head>
 <body>
   <header class="appbar">
     <button class="appbar-back" id="appBack" aria-label="Voltar" hidden>‹</button>
     <div class="brandlockup">
-      <div class="brandmark" aria-hidden="true"><span>C</span><i>⚙</i></div>
-      <div>
-        <div class="eyebrow">AUTO MECÂNICA</div>
-        <div class="brandname">CONFIANÇA</div>
-      </div>
+      <span class="brand-logo-premium brand-logo-art" role="img" aria-label="Auto Mecânica Confiança"></span>
     </div>
     <button class="appbar-action" id="installBtn" hidden aria-label="Instalar aplicativo">＋</button>
   </header>
 
   <main id="app">
     <section class="view active" data-view="dashboard">
+      <div class="hero-banner"><span class="brand-banner-art" role="img" aria-label="Auto Mecânica Confiança"></span></div>
       <div class="hero">
         <span class="muted">Painel operacional</span>
         <h1>Olá! 👋</h1>
@@ -50,6 +47,7 @@
     </section>
 
     <section class="view" data-view="orders">
+      <div class="page-brand-chip"><span class="brand-banner-art" role="img" aria-label="Auto Mecânica Confiança"></span></div>
       <div class="page-title"><div><span>Operação</span><h1>Ordens de serviço</h1></div><button class="btn primary compact" data-go="new-os">＋ Nova</button></div>
       <label class="search"><span>⌕</span><input id="orderSearch" placeholder="Buscar placa, cliente ou OS"></label>
       <div class="chips">
@@ -62,12 +60,14 @@
     </section>
 
     <section class="view" data-view="clients">
+      <div class="page-brand-chip"><span class="brand-banner-art" role="img" aria-label="Auto Mecânica Confiança"></span></div>
       <div class="page-title"><div><span>Relacionamento</span><h1>Clientes</h1></div><button class="btn primary compact" id="newClientBtn">＋ Novo</button></div>
       <label class="search"><span>⌕</span><input id="clientSearch" placeholder="Buscar nome, telefone ou veículo"></label>
       <div class="stack" id="clientList"></div>
     </section>
 
     <section class="view" data-view="new-os">
+      <div class="page-brand-chip"><span class="brand-banner-art" role="img" aria-label="Auto Mecânica Confiança"></span></div>
       <div class="wizard-head">
         <span class="muted">Nova Ordem de Serviço</span>
         <h1 id="wizardTitle">Cliente</h1>
@@ -139,6 +139,7 @@
     </section>
 
     <section class="view" data-view="budget">
+      <div class="page-brand-chip"><span class="brand-banner-art" role="img" aria-label="Auto Mecânica Confiança"></span></div>
       <div class="page-title"><div><span>OF-0034</span><h1>Orçamento</h1></div><span class="status waiting">Aguardando aprovação</span></div>
       <div class="budget-sheet">
         <div class="budget-line"><div><b>Barra estabilizadora</b><small>Peça + M.O.</small></div><strong>R$ 320,00</strong></div>
@@ -155,7 +156,7 @@
     </section>
 
     <section class="view client-view public-approval" data-view="client-approval">
-      <div class="approval-brand"><div class="brandmark"><span>C</span><i>⚙</i></div><div><small>ORÇAMENTO DIGITAL</small><b>AUTO MECÂNICA CONFIANÇA</b></div></div>
+      <div class="approval-brand approval-brand-banner approval-brand-premium"><span class="brand-logo-art approval-logo-art" role="img" aria-label="Auto Mecânica Confiança"></span></div>
       <div class="approval-box">
         <span>Orçamento #000123 · válido para este veículo</span>
         <h1>R$ 720,00</h1>
@@ -176,6 +177,7 @@
     </section>
 
     <section class="view" data-view="mechanic">
+      <div class="page-brand-chip"><span class="brand-banner-art" role="img" aria-label="Auto Mecânica Confiança"></span></div>
       <div class="page-title"><div><span>Área técnica</span><h1>Minhas OS</h1></div><span class="status service">sem valores</span></div>
       <div class="mechanic-tabs"><button class="active">Minhas OS</button><button>Em andamento</button></div>
       <article class="mechanic-card">
@@ -195,6 +197,7 @@
     </section>
 
     <section class="view" data-view="stock">
+      <div class="page-brand-chip"><span class="brand-banner-art" role="img" aria-label="Auto Mecânica Confiança"></span></div>
       <div class="page-title"><div><span>Peças</span><h1>Estoque</h1></div><button class="btn primary compact">＋ Entrada</button></div>
       <label class="search"><span>⌕</span><input placeholder="Buscar produto"></label>
       <div class="stack">
@@ -224,6 +227,6 @@
   </div>
 
   <div class="toast" id="toast"></div>
-  <script src="./app.js?v=7"></script>
+  <script src="./app.js?v=9"></script>
 </body>
 </html>
