@@ -1960,3 +1960,8 @@ body.no-scroll .os-global-actions{
   font-size:8px;
   font-weight:800;
 }
+
+
+/* ===== v12.2 server-backed finance receipts ===== */
+.finance-row small{max-width:100%}
+.receipt-drop.server-ready{border-color:#3a6850}
