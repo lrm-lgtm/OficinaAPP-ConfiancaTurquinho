@@ -3,207 +3,201 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#121212">
-  <meta name="description" content="Demo navegável do sistema próprio Auto Mecânica Confiança">
+  <meta name="theme-color" content="#0b0d0f">
+  <meta name="description" content="Auto Mecânica Confiança — gestão de oficina">
   <title>Auto Mecânica Confiança</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-  <header class="topbar">
+  <header class="appbar">
+    <button class="appbar-back" id="appBack" aria-label="Voltar" hidden>‹</button>
     <div class="brandlockup">
       <div class="brandmark" aria-hidden="true"><span>C</span><i>⚙</i></div>
       <div>
         <div class="eyebrow">AUTO MECÂNICA</div>
-        <h1>CONFIANÇA</h1>
+        <div class="brandname">CONFIANÇA</div>
       </div>
     </div>
-    <button class="iconbtn" id="installBtn" hidden aria-label="Instalar aplicativo">＋</button>
+    <button class="appbar-action" id="installBtn" hidden aria-label="Instalar aplicativo">＋</button>
   </header>
 
   <main id="app">
     <section class="view active" data-view="dashboard">
-      <div class="hello">
-        <div>
-          <span class="muted">Painel operacional</span>
-          <h2>Hoje na oficina</h2>
-        </div>
-        <span class="live"><i></i> Demo</span>
+      <div class="hero">
+        <span class="muted">Painel operacional</span>
+        <h1>Olá! 👋</h1>
+        <p>Vamos organizar a oficina de hoje.</p>
       </div>
 
-      <div class="kpis">
-        <article class="card kpi"><span>Abertas</span><strong>8</strong><small>todas as etapas</small></article>
-        <article class="card kpi"><span>Aguardando cliente</span><strong>2</strong><small>orçamento pendente</small></article>
-        <article class="card kpi"><span>Em serviço</span><strong>3</strong><small>na bancada</small></article>
-        <article class="card kpi"><span>Prontas</span><strong>2</strong><small>aguardando retirada</small></article>
+      <div class="dashboard-grid">
+        <button class="metric metric-primary" data-go="new-os"><span class="metric-icon">＋</span><b>Nova OS</b><small>Abertura rápida</small></button>
+        <button class="metric" data-go="orders"><span class="metric-icon">▤</span><strong id="openCount">8</strong><b>OS em aberto</b></button>
+        <button class="metric metric-warn" data-filter-jump="waiting"><span class="metric-icon">◷</span><strong>2</strong><b>Em orçamento</b></button>
+        <button class="metric" data-go="mechanic"><span class="metric-icon">🔧</span><strong>3</strong><b>Em execução</b></button>
       </div>
 
-      <div class="section-title">
-        <h3>Ações rápidas</h3>
-      </div>
-      <div class="quick">
-        <button class="action primary" data-go="new-os"><b>＋</b><span>Nova OS</span></button>
-        <button class="action" data-go="inspection"><b>📷</b><span>Vistoria</span></button>
-        <button class="action" data-go="budget"><b>R$</b><span>Orçamento</span></button>
-        <button class="action" data-go="mechanic"><b>🔧</b><span>Mecânico</span></button>
+      <h2 class="section-label">Acesso rápido</h2>
+      <div class="quick-list">
+        <button data-go="clients"><span>👥</span><div><b>Clientes</b><small>Cadastro e histórico</small></div><em>›</em></button>
+        <button data-go="stock"><span>▦</span><div><b>Estoque</b><small>Peças, reservas e movimentações</small></div><em>›</em></button>
+        <button data-go="orders"><span>📋</span><div><b>Ordens de serviço</b><small>Acompanhar todas as etapas</small></div><em>›</em></button>
+        <button data-go="mechanic"><span>🔧</span><div><b>Área do mecânico</b><small>Execução sem valores financeiros</small></div><em>›</em></button>
       </div>
 
-      <div class="section-title">
-        <h3>Precisa de atenção</h3>
-        <button class="linkbtn" data-go="orders">ver todas</button>
-      </div>
-      <div class="stack">
-        <button class="card alert" data-open-os="31">
-          <div><b>OF-0031 · ABC1D23</b><span>Aguardando cliente há 2 dias</span></div><em>2 d</em>
-        </button>
-        <button class="card alert" data-open-os="28">
-          <div><b>OF-0028 · XYZ9A88</b><span>Aguardando peça há 4 dias</span></div><em>4 d</em>
-        </button>
-      </div>
-
-      <div class="section-title"><h3>Em andamento</h3></div>
+      <div class="section-head"><h2>Em andamento</h2><button data-go="orders">Ver todas</button></div>
       <div class="stack" id="dashboardOrders"></div>
     </section>
 
     <section class="view" data-view="orders">
-      <div class="pagehead">
-        <div><span class="muted">Operação</span><h2>Ordens de serviço</h2></div>
-        <button class="btn primary" data-go="new-os">＋ Nova</button>
-      </div>
+      <div class="page-title"><div><span>Operação</span><h1>Ordens de serviço</h1></div><button class="btn primary compact" data-go="new-os">＋ Nova</button></div>
       <label class="search"><span>⌕</span><input id="orderSearch" placeholder="Buscar placa, cliente ou OS"></label>
       <div class="chips">
         <button class="chip active" data-filter="all">Todas</button>
-        <button class="chip" data-filter="service">Em serviço</button>
+        <button class="chip" data-filter="service">Em execução</button>
         <button class="chip" data-filter="waiting">Aguardando</button>
         <button class="chip" data-filter="ready">Prontas</button>
       </div>
       <div class="stack" id="orderList"></div>
     </section>
 
+    <section class="view" data-view="clients">
+      <div class="page-title"><div><span>Relacionamento</span><h1>Clientes</h1></div><button class="btn primary compact" id="newClientBtn">＋ Novo</button></div>
+      <label class="search"><span>⌕</span><input id="clientSearch" placeholder="Buscar nome, telefone ou veículo"></label>
+      <div class="stack" id="clientList"></div>
+    </section>
+
     <section class="view" data-view="new-os">
-      <div class="pagehead"><div><span class="muted">Recepção</span><h2>Abrir nova OS</h2></div></div>
-      <form class="card form" id="newOsForm">
-        <label>Nome do cliente *<input name="customer" required autocomplete="name" placeholder="Nome do cliente"><small class="muted">Único dado obrigatório para abrir a OS rapidamente.</small></label>
-        <div class="formgrid">
-          <label>Placa<input name="plate" maxlength="8" placeholder="Pode completar depois"></label>
-          <label>Quilometragem<input name="km" inputmode="numeric" placeholder="84500"></label>
+      <div class="wizard-head">
+        <span class="muted">Nova Ordem de Serviço</span>
+        <h1 id="wizardTitle">Cliente</h1>
+        <div class="wizard-steps">
+          <button class="active" data-step-nav="1"><i>1</i><span>Cliente</span></button>
+          <button data-step-nav="2"><i>2</i><span>Veículo</span></button>
+          <button data-step-nav="3"><i>3</i><span>Vistoria</span></button>
+          <button data-step-nav="4"><i>4</i><span>Resumo</span></button>
         </div>
-        <label>Veículo<input name="vehicle" placeholder="Pode completar depois"></label>
-        <label>Queixa / serviço solicitado<textarea name="complaint" rows="4" placeholder="Pode completar depois"></textarea></label>
-        <button class="btn primary full" type="submit">Abrir OS e ir para fotos</button>
+      </div>
+
+      <form id="osWizard">
+        <section class="wizard-panel active" data-step="1">
+          <div class="form-card">
+            <h2>1. Cliente <em>obrigatório</em></h2>
+            <label>Nome do cliente *
+              <input name="customer" id="wizCustomer" required autocomplete="name" placeholder="Digite o nome do cliente">
+            </label>
+            <p class="helper">Só o nome é necessário para abrir um chamado inicial rápido.</p>
+            <button class="btn secondary full" type="button" id="pickExistingClient">👤 Selecionar cliente cadastrado</button>
+          </div>
+          <button class="btn primary full next-step" type="button" data-next="2">Continuar</button>
+          <button class="text-action full" type="button" id="quickCreate">Abrir OS rápida só com o nome</button>
+        </section>
+
+        <section class="wizard-panel" data-step="2">
+          <div class="form-card">
+            <h2>2. Veículo <em>pode completar depois</em></h2>
+            <label>Placa<input name="plate" maxlength="8" autocomplete="off" placeholder="ABC1D23"></label>
+            <label>Modelo / versão<input name="vehicle" placeholder="Ex.: Chevrolet Onix 1.0"></label>
+            <div class="formgrid">
+              <label>Ano<input name="year" inputmode="numeric" placeholder="2020"></label>
+              <label>Quilometragem<input name="km" inputmode="numeric" placeholder="84500"></label>
+            </div>
+            <label>Relato inicial<textarea name="complaint" rows="4" placeholder="Ex.: barulho na suspensão dianteira"></textarea></label>
+          </div>
+          <div class="wizard-actions"><button class="btn secondary" type="button" data-prev="1">Voltar</button><button class="btn primary" type="button" data-next="3">Continuar</button></div>
+        </section>
+
+        <section class="wizard-panel" data-step="3">
+          <div class="form-card">
+            <h2>3. Vistoria de entrada</h2>
+            <p class="helper strong">Tire as 4 fotos obrigatórias do veículo. A 5ª foto do painel é opcional.</p>
+            <div class="capture-grid" id="wizardPhotos">
+              <label class="capture-card required" data-slot="front"><input type="file" accept="image/*" capture="environment"><div class="capture-preview"><span>📷</span></div><b>Frente *</b></label>
+              <label class="capture-card required" data-slot="rear"><input type="file" accept="image/*" capture="environment"><div class="capture-preview"><span>📷</span></div><b>Traseira *</b></label>
+              <label class="capture-card required" data-slot="left"><input type="file" accept="image/*" capture="environment"><div class="capture-preview"><span>📷</span></div><b>Lateral esquerda *</b></label>
+              <label class="capture-card required" data-slot="right"><input type="file" accept="image/*" capture="environment"><div class="capture-preview"><span>📷</span></div><b>Lateral direita *</b></label>
+              <label class="capture-card optional" data-slot="panel"><input type="file" accept="image/*" capture="environment"><div class="capture-preview"><span>＋</span></div><b>Painel / km</b><small>opcional</small></label>
+            </div>
+            <div class="photo-progress"><span id="wizardPhotoLabel">0 de 4 obrigatórias</span><div><i id="photoProgressBar"></i></div></div>
+          </div>
+          <div class="wizard-actions"><button class="btn secondary" type="button" data-prev="2">Voltar</button><button class="btn primary" type="button" id="toSummary" disabled>Continuar</button></div>
+        </section>
+
+        <section class="wizard-panel" data-step="4">
+          <div class="summary-card">
+            <div class="summary-title"><h2>Resumo inicial</h2><button type="button" data-prev="1">Editar</button></div>
+            <dl id="wizardSummary"></dl>
+            <label class="check-option"><input type="checkbox" id="goBudgetAfterCreate"><span>Criar OS e ir para o orçamento</span></label>
+          </div>
+          <div class="wizard-actions"><button class="btn secondary" type="button" data-prev="3">Voltar</button><button class="btn primary" type="submit">Criar Ordem de Serviço</button></div>
+        </section>
       </form>
-      <div class="hint">Nesta demo os dados ficam apenas neste navegador.</div>
     </section>
 
     <section class="view" data-view="detail">
-      <button class="back" data-go="orders">‹ Voltar para OS</button>
       <div id="osDetail"></div>
     </section>
 
-    <section class="view" data-view="inspection">
-      <div class="pagehead">
-        <div><span class="muted">Evidências</span><h2>Vistoria de entrada</h2></div>
-        <span class="pill">OF-0034</span>
-      </div>
-      <article class="card vehicle">
-        <div class="vehicle-icon">🚗</div>
-        <div><b>Toyota Corolla · ABC1D23</b><span>Cliente Exemplo · 84.512 km</span></div>
-      </article>
-      <div class="section-title"><h3>Fotos iniciais obrigatórias</h3><span id="photoCount">0/4</span></div>
-      <div class="photo-grid" id="photos">
-        <button data-shot="Frente" data-required="1">＋<span>Frente *</span></button>
-        <button data-shot="Traseira" data-required="1">＋<span>Traseira *</span></button>
-        <button data-shot="Lateral E" data-required="1">＋<span>Lateral E *</span></button>
-        <button data-shot="Lateral D" data-required="1">＋<span>Lateral D *</span></button>
-        <button data-shot="Painel" data-required="0">＋<span>Painel (opcional)</span></button>
-      </div>
-      <div class="hint">* As quatro vistas externas são obrigatórias para concluir a vistoria. A foto do painel é opcional.</div>
-      <div class="section-title"><h3>Avarias na entrada</h3></div>
-      <div class="card damage-map">
-        <div class="carshape">🚘</div>
-        <div class="damage-options">
-          <label><input type="checkbox"> Dianteira</label>
-          <label><input type="checkbox"> Lateral esquerda</label>
-          <label><input type="checkbox"> Lateral direita</label>
-          <label><input type="checkbox"> Traseira</label>
-          <label><input type="checkbox"> Rodas/pneus</label>
-          <label><input type="checkbox"> Interior</label>
-        </div>
-      </div>
-      <label class="field">Observações<textarea rows="3" placeholder="Riscos, amassados, objetos deixados no veículo..."></textarea></label>
-      <button class="btn primary full" id="finishInspection">Finalizar vistoria</button>
-    </section>
-
     <section class="view" data-view="budget">
-      <div class="pagehead">
-        <div><span class="muted">OF-0034</span><h2>Orçamento</h2></div>
-        <span class="pill warn">Revisão 2</span>
+      <div class="page-title"><div><span>OF-0034</span><h1>Orçamento</h1></div><span class="status waiting">Aguardando aprovação</span></div>
+      <div class="budget-sheet">
+        <div class="budget-line"><div><b>Barra estabilizadora</b><small>Peça + M.O.</small></div><strong>R$ 320,00</strong></div>
+        <div class="budget-line"><div><b>Terminal de direção</b><small>Peça + M.O.</small></div><strong>R$ 280,00</strong></div>
+        <div class="budget-line"><div><b>Alinhamento e balanceamento</b><small>Serviço</small></div><strong>R$ 120,00</strong></div>
+        <div class="budget-total"><span>Total</span><strong>R$ 720,00</strong></div>
       </div>
-      <div class="card budget-head">
-        <div><span>Cliente</span><b>Cliente Exemplo</b></div>
-        <div><span>Veículo</span><b>Corolla · ABC1D23</b></div>
+      <button class="btn secondary full" id="addBudgetItem">＋ Adicionar item</button>
+      <div class="send-card">
+        <div><b>Aprovação do cliente</b><small>Gere um link para aprovação remota.</small></div>
+        <button class="btn primary" id="copyApproval">Copiar link</button>
       </div>
-      <div class="stack" id="budgetItems">
-        <article class="card lineitem"><div><b>Pastilha de freio dianteira</b><span>2 un × R$ 185,00</span></div><strong>R$ 370,00</strong></article>
-        <article class="card lineitem"><div><b>Fluido de freio DOT 4</b><span>1 un × R$ 55,00</span></div><strong>R$ 55,00</strong></article>
-        <article class="card lineitem"><div><b>Mão de obra</b><span>Troca e sangria</span></div><strong>R$ 280,00</strong></article>
-      </div>
-      <button class="ghost full" id="addBudgetItem">＋ Adicionar item</button>
-      <div class="card totals">
-        <div><span>Subtotal</span><b>R$ 705,00</b></div>
-        <div><span>Desconto</span><b>R$ 25,00</b></div>
-        <div class="grand"><span>Total</span><strong>R$ 680,00</strong></div>
-      </div>
-      <div class="approval">
-        <div><b>Link do cliente</b><span>Envie para aprovação remota</span></div>
-        <button class="btn" id="copyApproval">Copiar link</button>
-      </div>
-      <button class="btn primary full" data-go="client">Visualizar como cliente</button>
+      <button class="btn primary full" data-go="client-approval">Visualizar aprovação do cliente</button>
     </section>
 
-    <section class="view" data-view="client">
-      <div class="client-card">
-        <div class="client-brand">AUTO MECÂNICA CONFIANÇA</div>
-        <h2>Seu orçamento está pronto</h2>
-        <p>Olá, Cliente Exemplo. Confira os serviços para o Toyota Corolla <b>ABC1D23</b>.</p>
-        <div class="client-total"><span>Total</span><strong>R$ 680,00</strong></div>
-        <details open><summary>Ver itens</summary>
-          <p>Pastilhas dianteiras — R$ 370,00</p>
-          <p>Fluido DOT 4 — R$ 55,00</p>
-          <p>Mão de obra — R$ 280,00</p>
-          <p>Desconto — − R$ 25,00</p>
-        </details>
-        <label class="field">Nome para confirmação<input id="approvalName" value="Cliente Exemplo"></label>
-        <div class="decision">
-          <button class="btn danger" id="rejectBudget">Recusar</button>
-          <button class="btn success" id="approveBudget">Aprovar R$ 680,00</button>
-        </div>
-        <div class="decision-result" id="decisionResult"></div>
+    <section class="view client-view" data-view="client-approval">
+      <div class="approval-brand"><div class="brandmark"><span>C</span><i>⚙</i></div><b>AUTO MECÂNICA CONFIANÇA</b></div>
+      <div class="approval-box">
+        <span>Orçamento para seu veículo</span>
+        <h1>R$ 720,00</h1>
+        <p>Chevrolet Onix 1.0 · ABC1D23</p>
       </div>
+      <div class="approval-items">
+        <div><span>Barra estabilizadora</span><b>R$ 320,00</b></div>
+        <div><span>Terminal de direção</span><b>R$ 280,00</b></div>
+        <div><span>Alinhamento e balanceamento</span><b>R$ 120,00</b></div>
+      </div>
+      <label class="floating-label">Seu nome<input id="approvalName" value="João da Silva"></label>
+      <button class="btn success full big" id="approveBudget">✓ Aprovar orçamento</button>
+      <button class="btn outline-danger full" id="rejectBudget">Solicitar revisão</button>
+      <div class="decision-result" id="decisionResult"></div>
     </section>
 
     <section class="view" data-view="mechanic">
-      <div class="pagehead"><div><span class="muted">Área técnica</span><h2>Fila do mecânico</h2></div><span class="pill">sem valores</span></div>
-      <article class="card mechanic-os">
-        <div class="row"><div><b>OF-0034 · ABC1D23</b><span>Toyota Corolla</span></div><span class="pill success">Liberada</span></div>
-        <hr>
-        <label class="task done"><input type="checkbox" checked> Inspecionar sistema de freio</label>
-        <label class="task"><input type="checkbox"> Substituir pastilhas dianteiras</label>
-        <label class="task"><input type="checkbox"> Trocar fluido e sangrar sistema</label>
-        <label class="task"><input type="checkbox"> Teste de rodagem</label>
-        <label class="field">Relato técnico<textarea rows="3" placeholder="O que foi encontrado / executado"></textarea></label>
-        <button class="btn primary full" id="finishService">Marcar serviço como concluído</button>
+      <div class="page-title"><div><span>Área técnica</span><h1>Minhas OS</h1></div><span class="status service">sem valores</span></div>
+      <div class="mechanic-tabs"><button class="active">Minhas OS</button><button>Em andamento</button></div>
+      <article class="mechanic-card">
+        <div class="mechanic-top"><div><span>#000121</span><h2>Suspensão dianteira</h2><small>Onix · ABC1D23</small></div><span class="status service">Em execução</span></div>
+        <div class="task-list">
+          <label class="task done"><input type="checkbox" checked> Inspecionar suspensão dianteira</label>
+          <label class="task"><input type="checkbox"> Substituir barra estabilizadora</label>
+          <label class="task"><input type="checkbox"> Substituir terminal de direção</label>
+          <label class="task"><input type="checkbox"> Teste de rodagem</label>
+        </div>
+        <label class="floating-label">Relato técnico<textarea rows="4" placeholder="O que foi encontrado / executado"></textarea></label>
+        <button class="btn primary full" id="finishService">Concluir serviço</button>
       </article>
-      <div class="hint">O perfil técnico vê peças e tarefas necessárias, mas não precisa visualizar custo interno ou preço de venda.</div>
+      <article class="mechanic-card dim">
+        <div class="mechanic-top"><div><span>#000119</span><h2>Troca de óleo</h2><small>HB20 · XY29A12</small></div><span class="status waiting">Aguardando</span></div>
+      </article>
     </section>
 
     <section class="view" data-view="stock">
-      <div class="pagehead"><div><span class="muted">Peças</span><h2>Estoque</h2></div><button class="btn">＋ Entrada</button></div>
+      <div class="page-title"><div><span>Peças</span><h1>Estoque</h1></div><button class="btn primary compact">＋ Entrada</button></div>
       <label class="search"><span>⌕</span><input placeholder="Buscar produto"></label>
       <div class="stack">
-        <article class="card stockrow"><div><b>Pastilha Freio Corolla</b><span>PF-COR-01 · reservado: 2</span></div><strong>8 un</strong></article>
-        <article class="card stockrow low"><div><b>Fluido DOT 4 500 ml</b><span>FD4-500 · reservado: 1</span></div><strong>3 un</strong></article>
-        <article class="card stockrow"><div><b>Filtro óleo Toyota</b><span>FO-TYO-02 · reservado: 0</span></div><strong>12 un</strong></article>
+        <article class="stock-card"><div><b>Pastilha Freio Corolla</b><small>PF-COR-01 · reservado: 2</small></div><strong>8 <small>un</small></strong></article>
+        <article class="stock-card low"><div><b>Fluido DOT 4 500 ml</b><small>FD4-500 · reservado: 1</small></div><strong>3 <small>un</small></strong></article>
+        <article class="stock-card"><div><b>Filtro óleo Toyota</b><small>FO-TYO-02 · reservado: 0</small></div><strong>12 <small>un</small></strong></article>
       </div>
     </section>
   </main>
@@ -211,9 +205,20 @@
   <nav class="bottomnav" aria-label="Navegação principal">
     <button class="active" data-go="dashboard"><span>⌂</span><b>Início</b></button>
     <button data-go="orders"><span>▤</span><b>OS</b></button>
+    <button data-go="clients"><span>👥</span><b>Clientes</b></button>
     <button data-go="stock"><span>▦</span><b>Estoque</b></button>
-    <button data-go="mechanic"><span>🔧</span><b>Mecânico</b></button>
   </nav>
+
+  <div class="modal" id="clientModal" hidden>
+    <div class="modal-card">
+      <div class="modal-head"><h2>Novo cliente</h2><button data-close-modal>×</button></div>
+      <form id="clientForm">
+        <label class="floating-label">Nome *<input name="name" required></label>
+        <label class="floating-label">Telefone<input name="phone" inputmode="tel"></label>
+        <button class="btn primary full">Salvar cliente</button>
+      </form>
+    </div>
+  </div>
 
   <div class="toast" id="toast"></div>
   <script src="./app.js"></script>
