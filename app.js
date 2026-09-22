@@ -11,6 +11,22 @@ const demoClients=[
   {id:3,name:"Marcos Silva",phone:"(19) 99102-8870",vehicle:"Honda Civic · DEF4G56",orders:5}
 ];
 
+const V11_SUPABASE_URL="https://koybcvdrbebeicxzitcf.supabase.co";
+const V11_PUBLIC_BUDGET_ENDPOINT=V11_SUPABASE_URL+"/functions/v1/public-budget";
+const V11_APPROVE_BUDGET_ENDPOINT=V11_SUPABASE_URL+"/functions/v1/approve-budget";
+const V11_PILOT_APPROVAL_TOKEN="59de1bbc-cf56-4579-a72b-a8f8e46cfe9d";
+let remoteBudgetState=null;
+let remoteApprovalState=null;
+
+function approvalTokenFromUrl(){
+  const params=new URLSearchParams(location.search);
+  const candidate=params.get("approval")||params.get("token");
+  return /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(candidate||"")?candidate:V11_PILOT_APPROVAL_TOKEN;
+}
+function moneyBR(value){
+  return new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(Number(value||0));
+}
+
 const views=[...document.querySelectorAll(".view")];
 const bottom=[...document.querySelectorAll(".bottomnav button")];
 const toastEl=document.getElementById("toast");
@@ -45,6 +61,8 @@ function go(name){
   if(name==="new-os") setWizardStep(1);
   if(name==="client-approval"){
     renderApprovalState();
+loadPublicBudgetFromServer();
+    loadPublicBudgetFromServer();
     setTimeout(resizeApprovalSignature,60);
   }
   queueScrollLock();
@@ -72,11 +90,12 @@ function getDemoApproval(){
   }catch{return null}
 }
 function allOrders(){
-  const approval=getDemoApproval();
+  const approval=remoteApprovalState||getDemoApproval();
   const demo=demoOrders.map(o=>{
     if(o.id!==34 || !approval) return o;
-    if(approval.status==="approved") return {...o,status:"Aprovado",kind:"service",stage:"Liberado para execução"};
-    if(approval.status==="revision") return {...o,status:"Revisão solicitada",kind:"waiting",stage:"Cliente solicitou revisão"};
+    const decision=approval.decision||approval.status;
+    if(decision==="approved") return {...o,status:"Aprovado",kind:"service",stage:"Liberado para execução"};
+    if(decision==="revision_requested"||decision==="revision") return {...o,status:"Revisão solicitada",kind:"waiting",stage:"Cliente solicitou revisão"};
     return o;
   });
   return [...JSON.parse(localStorage.getItem("oficina-orders")||"[]"),...demo];
@@ -445,10 +464,74 @@ function openDetail(id){
 
 document.getElementById("addBudgetItem").addEventListener("click",()=>toast("Na versão funcional, abre a busca de peça/serviço."));
 document.getElementById("copyApproval").addEventListener("click",async()=>{
-  const link=location.origin+location.pathname+"?approval=demo-000123#aprovar";
+  const link=location.origin+location.pathname+"?approval="+encodeURIComponent(V11_PILOT_APPROVAL_TOKEN)+"&v=11#aprovar";
   try{await navigator.clipboard.writeText(link);toast("Link de aprovação copiado.");}
   catch{toast("Link pronto para compartilhar.");}
 });
+// ---- v11 real public approval backend ----
+async function loadPublicBudgetFromServer(){
+  const token=approvalTokenFromUrl();
+  const meta=document.getElementById("approvalMeta");
+  const vehicle=document.getElementById("approvalVehicle");
+  const total=document.getElementById("approvalTotal");
+  const items=document.getElementById("approvalItems");
+  try{
+    if(meta) meta.textContent="Carregando orçamento…";
+    const response=await fetch(V11_PUBLIC_BUDGET_ENDPOINT+"?token="+encodeURIComponent(token),{cache:"no-store"});
+    const payload=await response.json();
+    if(!response.ok) throw new Error(payload.error||"Falha ao carregar orçamento");
+    remoteBudgetState=payload.budget;
+    remoteApprovalState=payload.approval||null;
+
+    const order=payload.budget.order||{};
+    const v=order.vehicle||{};
+    const vehicleText=[v.make,v.model,v.version].filter(Boolean).join(" ")||"Veículo";
+    const plate=v.plate||"SEM PLACA";
+
+    if(meta) meta.textContent="ORÇAMENTO #"+String(order.number||"—").padStart(6,"0")+" · REVISÃO "+payload.budget.revision;
+    if(vehicle) vehicle.textContent=vehicleText+" · "+plate;
+    if(total) total.textContent=moneyBR(payload.budget.total);
+    if(items){
+      items.innerHTML=(payload.budget.items||[]).map(item=>
+        '<div><span>'+escapeHtml(item.description)+'</span><b>'+moneyBR(item.line_total)+'</b></div>'
+      ).join("")||'<div><span>Sem itens</span><b>—</b></div>';
+    }
+    const input=document.getElementById("approvalName");
+    if(input && order.customer?.name) input.value=order.customer.name;
+    renderApprovalState();
+    renderDashboard();
+    renderOrders();
+  }catch(error){
+    if(meta) meta.textContent="Não foi possível carregar o orçamento";
+    if(items) items.innerHTML='<div><span>Erro ao carregar</span><b>!</b></div>';
+    toast("Falha ao carregar orçamento real.");
+  }
+}
+
+async function sendRealApproval(decision,name,signatureData){
+  const token=approvalTokenFromUrl();
+  const response=await fetch(V11_APPROVE_BUDGET_ENDPOINT,{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      token,
+      name,
+      decision,
+      consent:decision==="approved"?Boolean(approvalConsent?.checked):false,
+      signatureDataUrl:decision==="approved"?signatureData:null
+    })
+  });
+  const payload=await response.json();
+  if(!response.ok) throw new Error(payload.error||"approval_failed");
+  remoteApprovalState={
+    customer_name:name,
+    decision,
+    consent:decision==="approved",
+    created_at:payload.decidedAt
+  };
+  return payload;
+}
+
 // ---- handwritten approval signature v10.5 ----
 const approvalSignature=document.getElementById("approvalSignature");
 const signatureBlock=document.getElementById("signatureBlock");
@@ -633,7 +716,7 @@ function saveDemoApproval(status,name,signatureData=null){
   renderOrders();
 }
 function renderApprovalState(){
-  const record=getDemoApproval();
+  const record=remoteApprovalState||getDemoApproval();
   const input=document.getElementById("approvalName");
   const actions=document.getElementById("approvalActions");
   const out=document.getElementById("decisionResult");
@@ -648,7 +731,7 @@ function renderApprovalState(){
     setTimeout(()=>{setupSignatureContext();clearApprovalSignature();updateApprovalButtonState()},60);
     return;
   }
-  input.value=record.name||input.value;
+  input.value=record.name||record.customer_name||input.value;
   input.disabled=true;
   actions.hidden=true;
   if(approvalConsent){approvalConsent.checked=Boolean(record.consent);approvalConsent.disabled=true}
@@ -656,24 +739,69 @@ function renderApprovalState(){
   if(clearSignatureBtn) clearSignatureBtn.hidden=true;
   if(record.status==="approved"){
     out.className="decision-result decision-card approved compact-decision";
-    out.innerHTML='<div><b>✓ Orçamento aprovado</b><span>Rev. '+record.revision+' · R$ '+record.amount.toFixed(2).replace(".",",")+' · '+formatDecisionTime(record.decidedAt)+'</span><span>'+escapeHtml(record.name)+'</span></div>'+(record.signatureData?'<div class="signature-receipt"><img src="'+record.signatureData+'" alt="Assinatura registrada"></div>':'');
+    const rev=record.revision||remoteBudgetState?.revision||1;
+    const amount=record.amount??remoteBudgetState?.total??0;
+    const decided=record.decidedAt||record.created_at;
+    const person=record.name||record.customer_name||"Cliente";
+    out.innerHTML='<div><b>✓ Orçamento aprovado</b><span>Rev. '+rev+' · '+moneyBR(amount)+' · '+formatDecisionTime(decided)+'</span><span>'+escapeHtml(person)+'</span></div>'+(record.signatureData?'<div class="signature-receipt"><img src="'+record.signatureData+'" alt="Assinatura registrada"></div>':'');
   }else{
     out.className="decision-result decision-card revision";
     out.innerHTML='<b>↺ Revisão solicitada</b><span>Revisão '+record.revision+' · R$ '+record.amount.toFixed(2).replace(".",",")+'</span><span>Solicitado por '+escapeHtml(record.name)+' em '+formatDecisionTime(record.decidedAt)+'</span><small>A oficina deve ajustar o orçamento e enviar uma nova revisão.</small>';
   }
 }
-document.getElementById("approveBudget").addEventListener("click",()=>{
+document.getElementById("approveBudget").addEventListener("click",async()=>{
   const name=document.getElementById("approvalName").value.trim();
   if(!name){toast("Informe o nome para aprovar.");return}
   if(!signatureHasInk || signatureDistance<=12){toast("Faça sua assinatura no quadro.");return}
   if(!approvalConsent?.checked){toast("Marque o aceite do orçamento.");return}
   const signatureData=getSignatureData();
   if(!signatureData){toast("Não consegui registrar a assinatura. Tente novamente.");return}
-  saveDemoApproval("approved",name,signatureData);
+  approveBudgetBtn.disabled=true;
+  try{
+    const result=await sendRealApproval("approved",name,signatureData);
+    remoteApprovalState={
+      name,
+      decision:"approved",
+      consent:true,
+      created_at:result.decidedAt,
+      revision:result.revision,
+      amount:result.total,
+      signatureData
+    };
+    renderApprovalState();
+    renderDashboard();
+    renderOrders();
+    toast("Orçamento aprovado e salvo no servidor.");
+  }catch(error){
+    updateApprovalButtonState();
+    if(String(error.message)==="already_decided"){
+      await loadPublicBudgetFromServer();
+      toast("Este orçamento já recebeu uma decisão.");
+    }else{
+      toast("Não foi possível registrar a aprovação.");
+    }
+  }
 });
-document.getElementById("rejectBudget").addEventListener("click",()=>{
+document.getElementById("rejectBudget").addEventListener("click",async()=>{
   const name=document.getElementById("approvalName").value.trim()||"Cliente";
-  saveDemoApproval("revision",name);
+  try{
+    const result=await sendRealApproval("revision_requested",name,null);
+    remoteApprovalState={
+      name,
+      decision:"revision_requested",
+      consent:false,
+      created_at:result.decidedAt,
+      revision:result.revision,
+      amount:result.total
+    };
+    renderApprovalState();
+    renderDashboard();
+    renderOrders();
+    toast("Pedido de revisão salvo no servidor.");
+  }catch(error){
+    if(String(error.message)==="already_decided") await loadPublicBudgetFromServer();
+    else toast("Não foi possível solicitar revisão.");
+  }
 });
 document.getElementById("finishService").addEventListener("click",()=>{
   const pending=[...document.querySelectorAll(".task input")].filter(x=>!x.checked).length;
