@@ -32,9 +32,11 @@ function toast(message){
 function go(name){
   previousView=currentView;
   currentView=name;
+  const publicMode=name==="client-approval";
+  document.body.classList.toggle("public-mode",publicMode);
   views.forEach(v=>v.classList.toggle("active",v.dataset.view===name));
   bottom.forEach(b=>b.classList.toggle("active",b.dataset.go===name));
-  appBack.hidden=["dashboard","orders","clients","stock"].includes(name);
+  appBack.hidden=publicMode || ["dashboard","orders","clients","stock"].includes(name);
   window.scrollTo({top:0,behavior:"smooth"});
   if(name==="orders") renderOrders();
   if(name==="clients") renderClients();
@@ -320,7 +322,10 @@ window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredPro
 document.getElementById("installBtn").addEventListener("click",async()=>{if(!deferredPrompt)return;deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;document.getElementById("installBtn").hidden=true});
 if("serviceWorker" in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));
 if(location.hash==="#aprovar")go("client-approval");
-window.addEventListener("hashchange",()=>{if(location.hash==="#aprovar")go("client-approval")});
+window.addEventListener("hashchange",()=>{
+  if(location.hash==="#aprovar") go("client-approval");
+  else if(currentView==="client-approval") go("dashboard");
+});
 
 renderDashboard();
 renderOrders();
