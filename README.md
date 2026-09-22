@@ -1,6 +1,6 @@
-# Oficina Confiança Turquinho
+# Auto Mecânica Confiança
 
-Sistema próprio de gestão de oficina automotiva, **standalone e mobile-first**.
+Sistema próprio de gestão da **Auto Mecânica Confiança**, standalone e mobile-first.
 
 > O Dolibarr foi usado como referência de fluxo e como experimento inicial. Ele **não é dependência** deste projeto e não faz parte da arquitetura-alvo.
 
@@ -51,3 +51,8 @@ A implementação funcional será separada em:
 - `docs/`: arquitetura, regras e homologação.
 
 As regras úteis descobertas durante o protótipo Dolibarr serão migradas como requisitos e testes, e não como dependências de código.
+
+
+## Identidade visual
+
+A interface toma como referência a fachada real da oficina: base grafite/preta, tipografia clara/prateada, laranja/vermelho como acento principal e amarelo apenas para alertas/destaques. A marca visível do produto é **Auto Mecânica Confiança**.
