@@ -44,6 +44,8 @@ function go(name){
   if(name==="clients") renderClients();
   if(name==="new-os") setWizardStep(1);
   if(name==="client-approval") renderApprovalState();
+queueScrollLock();
+  queueScrollLock();
 }
 
 document.querySelectorAll("[data-go]").forEach(btn=>btn.addEventListener("click",()=>go(btn.dataset.go)));
@@ -125,6 +127,7 @@ function renderDashboard(){
 
   document.getElementById("dashboardOrders").innerHTML=open.slice(0,3).map(orderCard).join("");
   bindOrderOpeners();
+  queueScrollLock();
 }
 
 function renderOrders(){
@@ -136,6 +139,7 @@ function renderOrders(){
   });
   document.getElementById("orderList").innerHTML=list.length?list.map(orderCard).join(""):'<div class="muted">Nenhuma OS encontrada.</div>';
   bindOrderOpeners();
+  queueScrollLock();
 }
 
 document.getElementById("orderSearch").addEventListener("input",renderOrders);
@@ -157,6 +161,7 @@ function renderClients(){
   const q=(document.getElementById("clientSearch").value||"").toLowerCase().trim();
   const list=allClients().filter(c=>!q||[c.name,c.phone,c.vehicle].join(" ").toLowerCase().includes(q));
   document.getElementById("clientList").innerHTML=list.map(clientCard).join("");
+  queueScrollLock();
 }
 document.getElementById("clientSearch").addEventListener("input",renderClients);
 
@@ -189,6 +194,7 @@ function setWizardStep(step){
   document.getElementById("wizardTitle").textContent=titles[step];
   window.scrollTo({top:0,behavior:"smooth"});
   if(step===4) renderWizardSummary();
+  queueScrollLock();
 }
 wizardNav.forEach(n=>n.addEventListener("click",()=>{
   const target=Number(n.dataset.stepNav);
@@ -416,6 +422,34 @@ window.addEventListener("hashchange",()=>{
   else if(currentView==="client-approval") go("dashboard");
 });
 
+// ---- viewport-fit scroll lock ----
+let scrollLockRaf=0;
+function syncScrollLock(){
+  const active=document.querySelector(".view.active");
+  if(!active) return;
+  if(document.body.classList.contains("public-mode") || document.body.classList.contains("sheet-open")){
+    document.body.classList.remove("no-scroll");
+    return;
+  }
+
+  document.body.classList.remove("no-scroll");
+  const appbar=document.querySelector(".appbar");
+  const nav=document.querySelector(".bottomnav");
+  const appbarH=appbar?.offsetHeight||0;
+  const navH=nav?.offsetHeight||0;
+  const available=Math.max(0,window.innerHeight-appbarH-navH);
+  const contentHeight=active.scrollHeight;
+
+  // A tiny tolerance prevents 1–3 px rounding from creating fake scroll.
+  document.body.classList.toggle("no-scroll",contentHeight<=available+6);
+}
+function queueScrollLock(){
+  cancelAnimationFrame(scrollLockRaf);
+  scrollLockRaf=requestAnimationFrame(()=>requestAnimationFrame(syncScrollLock));
+}
+window.addEventListener("resize",queueScrollLock,{passive:true});
+window.visualViewport?.addEventListener("resize",queueScrollLock,{passive:true});
+
 // ---- v10 compact interaction layer ----
 const quickActionSheet=document.getElementById("quickActionSheet");
 const moreSheet=document.getElementById("moreSheet");
@@ -426,10 +460,12 @@ function openSheet(sheet){
   [quickActionSheet,moreSheet,searchSheet].forEach(s=>{if(s && s!==sheet)s.hidden=true});
   sheet.hidden=false;
   document.body.classList.add("sheet-open");
+  document.body.classList.remove("no-scroll");
 }
 function closeSheets(){
   [quickActionSheet,moreSheet,searchSheet].forEach(s=>{if(s)s.hidden=true});
   document.body.classList.remove("sheet-open");
+  queueScrollLock();
 }
 document.querySelectorAll("[data-close-sheet]").forEach(btn=>btn.addEventListener("click",closeSheets));
 document.getElementById("quickActionBtn")?.addEventListener("click",()=>openSheet(quickActionSheet));
