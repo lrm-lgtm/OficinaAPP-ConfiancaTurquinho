@@ -7,7 +7,7 @@
   <meta name="description" content="Auto Mecânica Confiança — gestão de oficina">
   <title>Auto Mecânica Confiança</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=11.3">
+  <link rel="stylesheet" href="./styles.css?v=11.4">
 </head>
 <body>
   <header class="appbar">
@@ -157,6 +157,10 @@
         <button class="btn primary" id="copyApproval">Copiar link</button>
       </div>
       <button class="btn primary full" data-go="client-approval">Visualizar aprovação do cliente</button>
+      <div class="send-card payment-provider-card">
+        <div><b>Recebimento</b><small>Pix via Mercado Pago · integração preparada</small></div>
+        <button class="btn secondary" id="openPixPayment">Cobrar Pix</button>
+      </div>
     </section>
 
     <section class="view client-view public-approval approval-v105" data-view="client-approval">
@@ -347,6 +351,37 @@
     </div>
   </div>
 
+  <div class="sheet" id="pixPaymentSheet" hidden>
+    <button class="sheet-backdrop" data-close-sheet aria-label="Fechar"></button>
+    <div class="sheet-card payment-sheet-card">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title-row">
+        <div><small>Recebimento da OS</small><h2>Gerar Pix</h2></div>
+        <span class="private-badge">Mercado Pago</span>
+      </div>
+
+      <div class="payment-amount-card">
+        <span>Valor</span>
+        <b id="pixPaymentAmount">R$ 720,00</b>
+        <small>Vinculado ao orçamento aprovado</small>
+      </div>
+
+      <form class="finance-form" id="pixPaymentForm">
+        <label>E-mail do pagador<input id="pixPayerEmail" type="email" required placeholder="cliente@exemplo.com"></label>
+        <label>CPF <em>opcional no piloto</em><input id="pixPayerDocument" inputmode="numeric" placeholder="000.000.000-00"></label>
+        <button class="btn primary full" type="submit" id="createPixBtn">Gerar cobrança Pix</button>
+      </form>
+
+      <div class="provider-status" id="pixProviderStatus">A cobrança será criada no backend; nenhuma credencial privada fica no navegador.</div>
+
+      <div class="pix-result" id="pixResult" hidden>
+        <img id="pixQrImage" alt="QR Code Pix" hidden>
+        <label>Copia e cola<textarea id="pixCopyPaste" rows="3" readonly></textarea></label>
+        <button class="btn secondary full" type="button" id="copyPixCode">Copiar código Pix</button>
+      </div>
+    </div>
+  </div>
+
   <div class="sheet" id="staffAuthSheet" hidden>
     <button class="sheet-backdrop" data-close-sheet aria-label="Fechar"></button>
     <div class="sheet-card auth-sheet-card">
@@ -378,6 +413,6 @@
 
   <div class="toast" id="toast"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./app.js?v=11.3"></script>
+  <script src="./app.js?v=11.4"></script>
 </body>
 </html>
