@@ -7,7 +7,7 @@
   <meta name="description" content="Auto Mecânica Confiança — gestão de oficina">
   <title>Auto Mecânica Confiança</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=12.1">
+  <link rel="stylesheet" href="./styles.css?v=12.2">
 </head>
 <body>
   <header class="appbar">
@@ -269,9 +269,9 @@
       <div class="page-title"><div><span>Somente interno</span><h1>Financeiro</h1></div><span class="status open">Privado</span></div>
 
       <div class="finance-kpis">
-        <article><span>A receber</span><b>R$ 1.480</b><small>2 OS</small></article>
-        <article><span>A pagar</span><b>R$ 436</b><small>peças/fornec.</small></article>
-        <article><span>Resultado</span><b>R$ 1.044</b><small>estimado</small></article>
+        <article><span>A receber</span><b id="financeReceivableTotal">R$ 0,00</b><small id="financeReceivableMeta">—</small></article>
+        <article><span>A pagar</span><b id="financePayableTotal">R$ 0,00</b><small>despesas abertas</small></article>
+        <article><span>Resultado</span><b id="financeResultTotal">R$ 0,00</b><small>estimado</small></article>
       </div>
 
       <div class="finance-actions">
@@ -500,6 +500,6 @@
 
   <div class="toast" id="toast"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./app.js?v=12.1"></script>
+  <script src="./app.js?v=12.2"></script>
 </body>
 </html>
