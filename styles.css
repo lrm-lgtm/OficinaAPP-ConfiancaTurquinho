@@ -637,3 +637,45 @@ body.sheet-open.no-scroll{
   body.no-scroll main{height:calc(100vh - 58px)}
   body.no-scroll .view.active{height:calc(100vh - 58px)}
 }
+
+
+/* ===== v10.2 voice dictation ===== */
+.voice-field{position:relative}
+.voice-field textarea{padding-right:88px!important}
+.voice-btn{
+  position:absolute;
+  right:8px;
+  bottom:8px;
+  min-width:68px;
+  height:36px;
+  padding:0 9px;
+  border:1px solid #3a4147;
+  border-radius:11px;
+  background:#1d2328;
+  color:#e8ecef;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:5px;
+  font-size:10px;
+  font-weight:900;
+  box-shadow:0 5px 14px rgba(0,0,0,.2);
+}
+.voice-btn .voice-icon{font-size:15px}
+.voice-btn.listening{
+  color:#fff;
+  background:linear-gradient(145deg,#f04431,#d6251d);
+  border-color:#ff5a47;
+  box-shadow:0 0 0 4px rgba(240,68,49,.12),0 7px 18px rgba(226,39,30,.24);
+}
+.voice-btn.listening .voice-icon{animation:voicePulse 1s ease-in-out infinite}
+.voice-status{
+  display:block;
+  min-height:14px;
+  margin:-4px 2px 7px;
+  color:var(--muted);
+  font-size:9px;
+  font-weight:700;
+}
+.voice-status.active{color:#ff796b}
+@keyframes voicePulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.16);opacity:.72}}
