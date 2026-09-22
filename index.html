@@ -7,7 +7,7 @@
   <meta name="description" content="Auto Mecânica Confiança — gestão de oficina">
   <title>Auto Mecânica Confiança</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=11.6">
+  <link rel="stylesheet" href="./styles.css?v=11.7">
 </head>
 <body>
   <header class="appbar">
@@ -325,6 +325,40 @@
     </div>
   </div>
 
+  <div class="sheet" id="osQuickSheet" hidden>
+    <button class="sheet-backdrop" data-close-sheet aria-label="Fechar"></button>
+    <div class="sheet-card os-quick-sheet-card">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title-row">
+        <div><small id="osQuickRef">OS</small><h2 id="osQuickTitle">Atualizar andamento</h2></div>
+        <span class="private-badge">interno</span>
+      </div>
+
+      <div class="os-quick-current">
+        <b id="osQuickVehicle">—</b>
+        <small id="osQuickStage">—</small>
+      </div>
+
+      <div class="os-state-grid" id="osStateGrid">
+        <button type="button" data-os-state="active"><span>▶</span><b>Em execução</b></button>
+        <button type="button" data-os-state="waiting_parts"><span>▦</span><b>Aguardando peça</b></button>
+        <button type="button" data-os-state="waiting_customer"><span>◌</span><b>Aguardando cliente</b></button>
+        <button type="button" data-os-state="technical_difficulty"><span>⚠</span><b>Bloqueio técnico</b></button>
+        <button type="button" data-os-state="ready" class="ready-action"><span>✓</span><b>Pronta</b></button>
+      </div>
+
+      <form id="osQuickForm" class="finance-form">
+        <div class="formgrid">
+          <label>Prazo combinado<input id="osQuickPromised" type="datetime-local"></label>
+          <label>Previsão atual<input id="osQuickForecast" type="datetime-local"></label>
+        </div>
+        <label>Motivo / observação interna<textarea id="osQuickReason" rows="2" placeholder="Ex.: fornecedor entrega terminal amanhã às 09h"></textarea></label>
+        <div class="quick-state-hint" id="osQuickHint">Escolha uma situação e salve.</div>
+        <button class="btn primary full" type="submit" id="osQuickSave">Salvar atualização</button>
+      </form>
+    </div>
+  </div>
+
   <div class="sheet" id="financeReceiptSheet" hidden>
     <button class="sheet-backdrop" data-close-sheet aria-label="Fechar"></button>
     <div class="sheet-card finance-sheet-card">
@@ -431,6 +465,6 @@
 
   <div class="toast" id="toast"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./app.js?v=11.6"></script>
+  <script src="./app.js?v=11.7"></script>
 </body>
 </html>
