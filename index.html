@@ -7,7 +7,7 @@
   <meta name="description" content="Auto Mecânica Confiança — gestão de oficina">
   <title>Auto Mecânica Confiança</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=10.1">
+  <link rel="stylesheet" href="./styles.css?v=10.2">
 </head>
 <body>
   <header class="appbar">
@@ -92,7 +92,15 @@
               <label>Ano<input name="year" inputmode="numeric" placeholder="2020"></label>
               <label>Quilometragem<input name="km" inputmode="numeric" placeholder="84500"></label>
             </div>
-            <label>Relato inicial<textarea name="complaint" rows="4" placeholder="Ex.: barulho na suspensão dianteira"></textarea></label>
+            <label>Relato inicial
+              <div class="voice-field">
+                <textarea name="complaint" id="initialReport" rows="4" placeholder="Ex.: barulho na suspensão dianteira"></textarea>
+                <button type="button" class="voice-btn" id="initialReportVoice" aria-label="Ditar relato inicial" title="Ditar relato inicial">
+                  <span class="voice-icon">🎙</span><span class="voice-label">Ditar</span>
+                </button>
+              </div>
+              <small class="voice-status" id="initialReportVoiceStatus" aria-live="polite"></small>
+            </label>
           </div>
           <div class="wizard-actions"><button class="btn secondary" type="button" data-prev="1">Voltar</button><button class="btn primary" type="button" data-next="3">Continuar</button></div>
         </section>
@@ -247,6 +255,6 @@
   </div>
 
   <div class="toast" id="toast"></div>
-  <script src="./app.js?v=10.1"></script>
+  <script src="./app.js?v=10.2"></script>
 </body>
 </html>
