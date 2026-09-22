@@ -218,6 +218,82 @@ document.getElementById("pickExistingClient").addEventListener("click",()=>{
   toast("Cliente "+c.name+" selecionado.");
 });
 
+// ---- voice dictation: initial report ----
+const initialReport=document.getElementById("initialReport");
+const initialReportVoice=document.getElementById("initialReportVoice");
+const initialReportVoiceStatus=document.getElementById("initialReportVoiceStatus");
+const SpeechRecognitionCtor=window.SpeechRecognition||window.webkitSpeechRecognition;
+let initialReportRecognition=null;
+let initialReportListening=false;
+let initialReportBaseText="";
+
+function setInitialReportVoiceState(active,message=""){
+  initialReportListening=active;
+  initialReportVoice?.classList.toggle("listening",active);
+  if(initialReportVoice){
+    initialReportVoice.querySelector(".voice-label").textContent=active?"Parar":"Ditar";
+    initialReportVoice.setAttribute("aria-label",active?"Parar ditado":"Ditar relato inicial");
+  }
+  if(initialReportVoiceStatus){
+    initialReportVoiceStatus.textContent=message;
+    initialReportVoiceStatus.classList.toggle("active",active);
+  }
+  queueScrollLock();
+}
+
+function stopInitialReportVoice(){
+  try{initialReportRecognition?.stop()}catch{}
+}
+
+if(initialReportVoice){
+  if(!SpeechRecognitionCtor){
+    initialReportVoice.addEventListener("click",()=>{
+      toast("Ditado de voz não disponível neste navegador. Use o microfone do teclado.");
+    });
+  }else{
+    initialReportRecognition=new SpeechRecognitionCtor();
+    initialReportRecognition.lang="pt-BR";
+    initialReportRecognition.continuous=true;
+    initialReportRecognition.interimResults=true;
+
+    initialReportRecognition.onstart=()=>{
+      initialReportBaseText=(initialReport.value||"").trim();
+      setInitialReportVoiceState(true,"Ouvindo agora… pode falar normalmente.");
+    };
+    initialReportRecognition.onresult=event=>{
+      let finalText="";
+      let interimText="";
+      for(let i=event.resultIndex;i<event.results.length;i++){
+        const text=event.results[i][0].transcript.trim();
+        if(event.results[i].isFinal) finalText+=(finalText?" ":"")+text;
+        else interimText+=(interimText?" ":"")+text;
+      }
+      if(finalText){
+        initialReportBaseText=[initialReportBaseText,finalText].filter(Boolean).join(initialReportBaseText?". ":"");
+      }
+      const combined=[initialReportBaseText,interimText].filter(Boolean).join(initialReportBaseText&&interimText?". ":"");
+      initialReport.value=combined;
+    };
+    initialReportRecognition.onerror=event=>{
+      const msg=event.error==="not-allowed"
+        ?"Permissão do microfone negada."
+        : event.error==="no-speech"
+          ?"Não ouvi fala. Toque no microfone para tentar novamente."
+          :"Não foi possível usar o ditado agora.";
+      setInitialReportVoiceState(false,msg);
+    };
+    initialReportRecognition.onend=()=>{
+      setInitialReportVoiceState(false,initialReport.value.trim()?"Ditado inserido no relato.":"");
+    };
+
+    initialReportVoice.addEventListener("click",()=>{
+      if(initialReportListening){stopInitialReportVoice();return}
+      try{initialReportRecognition.start()}
+      catch{toast("O ditado já está iniciando.")}
+    });
+  }
+}
+
 document.getElementById("quickCreate").addEventListener("click",()=>{
   if(!customerValid()) return;
   const fd=new FormData(wizard);
