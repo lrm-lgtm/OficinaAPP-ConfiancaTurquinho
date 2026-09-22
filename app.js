@@ -12,6 +12,10 @@ const demoClients=[
   {id:3,name:"Marcos Silva",phone:"(19) 99102-8870",vehicle:"Honda Civic · DEF4G56",orders:5}
 ];
 
+const APP_QUERY=new URLSearchParams(location.search);
+const DEMO_MODE=APP_QUERY.get("demo")==="1";
+const REAL_MODE=!DEMO_MODE;
+
 const V11_SUPABASE_URL="https://koybcvdrbebeicxzitcf.supabase.co";
 const V11_PUBLIC_BUDGET_ENDPOINT=V11_SUPABASE_URL+"/functions/v1/public-budget";
 const V11_APPROVE_BUDGET_ENDPOINT=V11_SUPABASE_URL+"/functions/v1/approve-budget";
@@ -33,6 +37,34 @@ let serverOrders=[];
 let serverClients=[];
 let serverDataReady=false;
 let serverSyncing=false;
+
+function isPublicApprovalRequest(){
+  const params=new URLSearchParams(location.search);
+  return Boolean(params.get("approval")||params.get("token")) || location.hash==="#aprovar";
+}
+function syncInternalAccessGate(message=""){
+  const gate=document.getElementById("internalAccessGate");
+  if(!gate) return;
+  const publicMode=document.body.classList.contains("public-mode")||isPublicApprovalRequest();
+  const active=Boolean(staffProfile?.active);
+  const locked=REAL_MODE && !publicMode && !active;
+  gate.hidden=!locked;
+  document.body.classList.toggle("staff-locked",locked);
+  const textEl=document.getElementById("internalAccessGateText");
+  if(textEl){
+    textEl.textContent=message || (
+      staffSession?.user
+        ? "Seu usuário existe, mas ainda precisa ser liberado para operar a oficina."
+        : "Entre ou crie seu acesso para trabalhar com dados reais da oficina."
+    );
+  }
+}
+function requireActiveStaff(message="Acesso interno necessário."){
+  if(DEMO_MODE||staffProfile?.active) return true;
+  syncInternalAccessGate(message);
+  openSheet(staffAuthSheet);
+  return false;
+}
 
 function staffRoleLabel(role){
   return ({owner:"Proprietário",manager:"Gerente",reception:"Recepção",mechanic:"Mecânico",finance:"Financeiro"})[role]||role||"Sem perfil";
@@ -73,8 +105,9 @@ function renderStaffAuthState(message=""){
       ?"Acesso interno ativo. Próxima etapa: sincronizar OS, fotos e financeiro com o servidor."
       : logged
         ?"Conta criada, mas ainda sem permissão para dados da oficina. Um responsável precisa liberar este usuário."
-        :"Sem login: o app continua em modo demonstração/local.");
+        :"Entre para acessar os dados reais da oficina.");
   }
+  syncInternalAccessGate(message);
 }
 async function refreshStaffSession(message=""){
   if(!supabaseClient){renderStaffAuthState("Biblioteca do servidor indisponível neste navegador.");return}
@@ -93,6 +126,7 @@ async function refreshStaffSession(message=""){
     serverOrders=[];
     serverClients=[];
   }
+  syncInternalAccessGate(message);
 }
 async function staffLogin(){
   if(!supabaseClient) return toast("Acesso ao servidor indisponível.");
@@ -119,7 +153,9 @@ async function staffSignup(){
 function approvalTokenFromUrl(){
   const params=new URLSearchParams(location.search);
   const candidate=params.get("approval")||params.get("token");
-  return /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(candidate||"")?candidate:(currentApprovalToken||V11_PILOT_APPROVAL_TOKEN);
+  if(/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(candidate||"")) return candidate;
+  if(currentApprovalToken) return currentApprovalToken;
+  return DEMO_MODE?V11_PILOT_APPROVAL_TOKEN:null;
 }
 function moneyBR(value){
   return new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(Number(value||0));
@@ -146,9 +182,13 @@ function toast(message){
 }
 
 function go(name){
+  const publicMode=name==="client-approval";
+  if(REAL_MODE && !publicMode && !staffProfile?.active){
+    syncInternalAccessGate();
+    return;
+  }
   previousView=currentView;
   currentView=name;
-  const publicMode=name==="client-approval";
   document.body.classList.toggle("public-mode",publicMode);
   views.forEach(v=>v.classList.toggle("active",v.dataset.view===name));
   bottom.forEach(b=>b.classList.toggle("active",b.dataset.go===name));
@@ -536,6 +576,7 @@ async function loadInspectionPhotos(order){
 
 
 function getDemoApproval(){
+  if(REAL_MODE) return null;
   try{
     const record=JSON.parse(localStorage.getItem("oficina-approval-000123")||"null");
     if(record?.status==="approved" && (!record.signatureData || record.consent!==true)){
@@ -547,6 +588,7 @@ function getDemoApproval(){
 }
 function allOrders(){
   if(staffProfile?.active && serverDataReady) return serverOrders;
+  if(REAL_MODE) return [];
   const approval=remoteApprovalState||getDemoApproval();
   const demo=demoOrders.map(o=>{
     if(o.id!==34 || !approval) return o;
@@ -560,6 +602,7 @@ function allOrders(){
 
 function allClients(){
   if(staffProfile?.active && serverDataReady) return serverClients;
+  if(REAL_MODE) return [];
   return [...JSON.parse(localStorage.getItem("oficina-clients")||"[]"),...demoClients];
 }
 
@@ -876,6 +919,10 @@ document.getElementById("clientForm").addEventListener("submit",async e=>{
       return;
     }
   }
+  if(REAL_MODE){
+    requireActiveStaff("Entre para cadastrar clientes reais.");
+    return;
+  }
   const saved=JSON.parse(localStorage.getItem("oficina-clients")||"[]");
   saved.unshift({id:Date.now(),name,phone:phone||"—",vehicle:"Sem veículo vinculado",orders:0});
   localStorage.setItem("oficina-clients",JSON.stringify(saved));
@@ -1074,6 +1121,10 @@ async function createOrder(fd,quick){
       return null;
     }
   }
+  if(REAL_MODE){
+    requireActiveStaff("Entre para criar uma Ordem de Serviço real.");
+    return null;
+  }
   const saved=JSON.parse(localStorage.getItem("oficina-orders")||"[]");
   const id=Date.now();
   const order={
@@ -1115,7 +1166,8 @@ function budgetActionLabel(o){
 }
 
 function openDetail(id){
-  const o=allOrders().find(x=>String(x.id)===String(id))||demoOrders[0];
+  const o=allOrders().find(x=>String(x.id)===String(id))||(DEMO_MODE?demoOrders[0]:null);
+  if(!o){toast("OS não encontrada no servidor.");return}
   const inspected=!o.quick;
   const detail=document.getElementById("osDetail");
   detail.innerHTML=
@@ -1176,6 +1228,7 @@ function saveLocalBudgetStore(store){
   localStorage.setItem("oficina-budgets",JSON.stringify(store));
 }
 function seedLocalBudget(order){
+  if(REAL_MODE) throw new Error("real_mode_requires_server");
   if(String(order?.id)==="34"){
     return {
       revision:{id:"local-rev-34-2",revision:2,status:"sent",subtotal:720,total:720,work_order_id:order.id},
@@ -1296,6 +1349,7 @@ async function loadServerBudget(order){
   currentApprovalToken=token?.token||null;
 }
 async function loadLocalBudget(order){
+  if(REAL_MODE) throw new Error("real_mode_requires_server");
   const store=localBudgetStore();
   const key=String(order.id);
   if(!store[key]){store[key]=seedLocalBudget(order);saveLocalBudgetStore(store)}
@@ -1304,8 +1358,15 @@ async function loadLocalBudget(order){
   currentApprovalToken=store[key].approvalToken||null;
 }
 async function renderBudget(){
+  if(REAL_MODE && !staffProfile?.active){
+    requireActiveStaff("Entre para acessar orçamentos reais.");
+    return;
+  }
   const order=allOrders().find(o=>String(o.id)===String(selectedBudgetOrderId))||allOrders()[0];
-  if(!order) return;
+  if(!order){
+    document.getElementById("budgetLines").innerHTML='<div class="budget-empty"><b>Nenhuma OS selecionada</b><span>Abra uma OS real para montar o orçamento.</span></div>';
+    return;
+  }
   selectedBudgetOrderId=order.id;
   document.getElementById("budgetLines").innerHTML='<div class="budget-empty">Carregando orçamento…</div>';
   try{
@@ -1496,10 +1557,14 @@ async function sendBudgetForApproval(){
     await syncServerData({quiet:true});
     renderBudgetState(order);
   }else{
-    currentApprovalToken=currentApprovalToken||V11_PILOT_APPROVAL_TOKEN;
+    currentApprovalToken=currentApprovalToken||(DEMO_MODE?V11_PILOT_APPROVAL_TOKEN:null);
   }
 
-  const link=location.origin+location.pathname+"?approval="+encodeURIComponent(currentApprovalToken||V11_PILOT_APPROVAL_TOKEN)+"&v=12#aprovar";
+  if(!currentApprovalToken){
+    toast("Não foi possível gerar um token de aprovação.");
+    return;
+  }
+  const link=location.origin+location.pathname+"?approval="+encodeURIComponent(currentApprovalToken)+"&v=12.4#aprovar";
   try{await navigator.clipboard.writeText(link);toast("Link da revisão atual copiado.");}
   catch{toast("Revisão pronta para compartilhar.");}
 }
@@ -1553,6 +1618,13 @@ async function loadPublicBudgetFromServer(){
   const vehicle=document.getElementById("approvalVehicle");
   const total=document.getElementById("approvalTotal");
   const items=document.getElementById("approvalItems");
+  if(!token){
+    if(meta) meta.textContent="Link de aprovação inválido";
+    if(items) items.innerHTML='<div><span>Este link não contém uma revisão válida.</span><b>!</b></div>';
+    const actions=document.getElementById("approvalActions");
+    if(actions) actions.hidden=true;
+    return null;
+  }
   try{
     if(meta) meta.textContent="Carregando orçamento…";
     const response=await fetch(V11_PUBLIC_BUDGET_ENDPOINT+"?token="+encodeURIComponent(token),{cache:"no-store"});
@@ -1590,6 +1662,7 @@ async function loadPublicBudgetFromServer(){
 
 async function sendRealApproval(decision,name,signatureData){
   const token=approvalTokenFromUrl();
+  if(!token) throw new Error("token_required");
   const response=await fetch(V11_APPROVE_BUDGET_ENDPOINT,{
     method:"POST",
     headers:{"Content-Type":"application/json"},
@@ -1899,6 +1972,7 @@ function formatDecisionTime(iso){
   try{return new Intl.DateTimeFormat("pt-BR",{dateStyle:"short",timeStyle:"short"}).format(new Date(iso))}catch{return ""}
 }
 function saveDemoApproval(status,name,signatureData=null){
+  if(REAL_MODE) return;
   const record={
     budget:"000123",
     revision:2,
@@ -2524,13 +2598,14 @@ document.querySelectorAll("[data-close-sheet]").forEach(btn=>btn.addEventListene
 document.getElementById("quickActionBtn")?.addEventListener("click",()=>openSheet(quickActionSheet));
 document.getElementById("moreNavBtn")?.addEventListener("click",()=>openSheet(moreSheet));
 document.getElementById("authStatusBtn")?.addEventListener("click",()=>openSheet(staffAuthSheet));
+document.getElementById("internalAccessGateBtn")?.addEventListener("click",()=>openSheet(staffAuthSheet));
 document.getElementById("staffAccessShortcut")?.addEventListener("click",()=>{closeSheets();openSheet(staffAuthSheet)});
 document.getElementById("staffLoginBtn")?.addEventListener("click",staffLogin);
 document.getElementById("staffSignupBtn")?.addEventListener("click",staffSignup);
 document.getElementById("staffLogoutBtn")?.addEventListener("click",async()=>{
   await supabaseClient?.auth.signOut();
   staffSession=null;staffProfile=null;
-  renderStaffAuthState("Sessão encerrada. Modo demonstração/local ativo.");
+  renderStaffAuthState("Sessão encerrada. Entre novamente para acessar a oficina.");
 });
 supabaseClient?.auth.onAuthStateChange(()=>setTimeout(()=>refreshStaffSession(),0));
 document.getElementById("globalSearchBtn")?.addEventListener("click",()=>{
@@ -2575,4 +2650,10 @@ renderClients();
 renderFinance();
 updatePhotoProgress();
 renderApprovalState();
+
+if(isPublicApprovalRequest()){
+  go("client-approval");
+}else{
+  syncInternalAccessGate();
+}
 refreshStaffSession();
