@@ -61,7 +61,6 @@ function go(name){
   if(name==="new-os") setWizardStep(1);
   if(name==="client-approval"){
     renderApprovalState();
-loadPublicBudgetFromServer();
     loadPublicBudgetFromServer();
     setTimeout(resizeApprovalSignature,60);
   }
@@ -737,7 +736,8 @@ function renderApprovalState(){
   if(approvalConsent){approvalConsent.checked=Boolean(record.consent);approvalConsent.disabled=true}
   if(approvalSignature) approvalSignature.style.pointerEvents="none";
   if(clearSignatureBtn) clearSignatureBtn.hidden=true;
-  if(record.status==="approved"){
+  const decision=record.decision||record.status;
+  if(decision==="approved"){
     out.className="decision-result decision-card approved compact-decision";
     const rev=record.revision||remoteBudgetState?.revision||1;
     const amount=record.amount??remoteBudgetState?.total??0;
@@ -745,8 +745,12 @@ function renderApprovalState(){
     const person=record.name||record.customer_name||"Cliente";
     out.innerHTML='<div><b>✓ Orçamento aprovado</b><span>Rev. '+rev+' · '+moneyBR(amount)+' · '+formatDecisionTime(decided)+'</span><span>'+escapeHtml(person)+'</span></div>'+(record.signatureData?'<div class="signature-receipt"><img src="'+record.signatureData+'" alt="Assinatura registrada"></div>':'');
   }else{
+    const rev=record.revision||remoteBudgetState?.revision||1;
+    const amount=record.amount??remoteBudgetState?.total??0;
+    const decided=record.decidedAt||record.created_at;
+    const person=record.name||record.customer_name||"Cliente";
     out.className="decision-result decision-card revision";
-    out.innerHTML='<b>↺ Revisão solicitada</b><span>Revisão '+record.revision+' · R$ '+record.amount.toFixed(2).replace(".",",")+'</span><span>Solicitado por '+escapeHtml(record.name)+' em '+formatDecisionTime(record.decidedAt)+'</span><small>A oficina deve ajustar o orçamento e enviar uma nova revisão.</small>';
+    out.innerHTML='<b>↺ Revisão solicitada</b><span>Revisão '+rev+' · '+moneyBR(amount)+'</span><span>Solicitado por '+escapeHtml(person)+' em '+formatDecisionTime(decided)+'</span><small>A oficina deve ajustar o orçamento e enviar uma nova revisão.</small>';
   }
 }
 document.getElementById("approveBudget").addEventListener("click",async()=>{
