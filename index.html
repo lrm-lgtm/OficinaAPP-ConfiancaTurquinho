@@ -7,7 +7,7 @@
   <meta name="description" content="Auto Mecânica Confiança — gestão de oficina">
   <title>Auto Mecânica Confiança</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=11.2">
+  <link rel="stylesheet" href="./styles.css?v=11.3">
 </head>
 <body>
   <header class="appbar">
@@ -15,6 +15,7 @@
     <div class="brandlockup">
       <span class="brand-logo-premium brand-logo-art" role="img" aria-label="Auto Mecânica Confiança"></span>
     </div>
+    <button class="appbar-action auth-action" id="authStatusBtn" aria-label="Acesso interno" title="Acesso interno">○</button>
     <button class="appbar-action install-action" id="installBtn" hidden aria-label="Instalar aplicativo" title="Instalar aplicativo">⇩</button>
   </header>
 
@@ -287,6 +288,7 @@
       <button class="sheet-action" data-sheet-go="mechanic"><span>🔧</span><div><b>Área do mecânico</b><small>Minhas OS e execução</small></div></button>
       <button class="sheet-action" data-sheet-go="stock"><span>▦</span><div><b>Estoque</b><small>Peças e reservas</small></div></button>
       <button class="sheet-action" data-sheet-go="finance"><span>R$</span><div><b>Financeiro</b><small>Custos internos e recebimentos</small></div></button>
+      <button class="sheet-action" id="staffAccessShortcut"><span>◉</span><div><b>Acesso interno</b><small>Login, perfil e sincronização</small></div></button>
       <button class="sheet-action" data-sheet-go="client-approval"><span>✓</span><div><b>Aprovação demo</b><small>Visualizar página do cliente</small></div></button>
     </div>
   </div>
@@ -345,7 +347,37 @@
     </div>
   </div>
 
+  <div class="sheet" id="staffAuthSheet" hidden>
+    <button class="sheet-backdrop" data-close-sheet aria-label="Fechar"></button>
+    <div class="sheet-card auth-sheet-card">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title-row">
+        <div><small>Equipe da oficina</small><h2>Acesso interno</h2></div>
+        <span class="private-badge" id="staffAuthBadge">offline</span>
+      </div>
+
+      <div class="auth-profile-card" id="staffProfileCard" hidden>
+        <div><b id="staffProfileName">—</b><small id="staffProfileRole">—</small></div>
+        <span id="staffProfileState">—</span>
+      </div>
+
+      <form class="finance-form" id="staffAuthForm">
+        <label>Nome completo<input id="staffAuthName" autocomplete="name" placeholder="Seu nome"></label>
+        <label>E-mail<input id="staffAuthEmail" type="email" autocomplete="email" required placeholder="voce@exemplo.com"></label>
+        <label>Senha<input id="staffAuthPassword" type="password" autocomplete="current-password" minlength="6" required placeholder="mínimo 6 caracteres"></label>
+        <div class="auth-actions">
+          <button class="btn primary" type="button" id="staffLoginBtn">Entrar</button>
+          <button class="btn secondary" type="button" id="staffSignupBtn">Criar acesso</button>
+        </div>
+      </form>
+
+      <div class="auth-message" id="staffAuthMessage">Sem login: o app continua em modo demonstração/local.</div>
+      <button class="btn outline-danger full" type="button" id="staffLogoutBtn" hidden>Sair deste aparelho</button>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
-  <script src="./app.js?v=11.2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./app.js?v=11.3"></script>
 </body>
 </html>
