@@ -1,8 +1,9 @@
 const demoOrders=[
-  {id:34,ref:"#000123",plate:"ABC1D23",vehicle:"Chevrolet Onix 1.0 2020",customer:"João da Silva",status:"Em orçamento",kind:"waiting",opened:"Hoje 09:12",stage:"Aguardando aprovação",complaint:"Barulho na suspensão dianteira."},
-  {id:31,ref:"#000121",plate:"ABC1D23",vehicle:"Chevrolet Onix 1.0",customer:"João da Silva",status:"Em execução",kind:"service",opened:"Hoje 08:40",stage:"Suspensão dianteira",complaint:"Barulho na dianteira."},
-  {id:28,ref:"#000119",plate:"XY29A12",vehicle:"Hyundai HB20",customer:"Ana Paula",status:"Aguardando",kind:"waiting",opened:"20/09 16:10",stage:"Troca de óleo",complaint:"Revisão preventiva."},
-  {id:25,ref:"#000116",plate:"DEF4G56",vehicle:"Honda Civic",customer:"Marcos Silva",status:"Pronta",kind:"ready",opened:"20/09 10:05",stage:"Aguardando retirada",complaint:"Freio dianteiro."}
+  {id:34,ref:"#000123",plate:"ABC1D23",vehicle:"Chevrolet Onix 1.0 2020",customer:"João da Silva",status:"Em orçamento",kind:"waiting",opened:"Hoje 09:12",stage:"Aguardando aprovação",complaint:"Barulho na suspensão dianteira.",health:"waiting_customer",promised:"Hoje 16:30",owner:"Recepção",blockedReason:"Aguardando aprovação do orçamento"},
+  {id:31,ref:"#000121",plate:"ABC1D23",vehicle:"Chevrolet Onix 1.0",customer:"João da Silva",status:"Em execução",kind:"service",opened:"Hoje 08:40",stage:"Suspensão dianteira",complaint:"Barulho na dianteira.",health:"attention",promised:"Hoje 17:30",owner:"Turquinho"},
+  {id:28,ref:"#000119",plate:"XY29A12",vehicle:"Hyundai HB20",customer:"Ana Paula",status:"Aguardando",kind:"waiting",opened:"20/09 16:10",stage:"Aguardando peça",complaint:"Revisão preventiva.",health:"waiting_parts",promised:"Amanhã 12:00",owner:"Turquinho",blockedReason:"Fornecedor confirmou peça para amanhã"},
+  {id:25,ref:"#000116",plate:"DEF4G56",vehicle:"Honda Civic",customer:"Marcos Silva",status:"Pronta",kind:"ready",opened:"20/09 10:05",stage:"Aguardando retirada",complaint:"Freio dianteiro.",health:"done",promised:"Hoje 11:00",owner:"Recepção"},
+  {id:24,ref:"#000115",plate:"GOL2H77",vehicle:"Volkswagen Gol 1.6",customer:"Carlos Mendes",status:"Em execução",kind:"service",opened:"19/09 14:25",stage:"Arrefecimento",complaint:"Aquecendo acima do normal.",health:"overdue",promised:"Ontem 17:00",owner:"Turquinho"}
 ];
 
 const demoClients=[
@@ -53,7 +54,7 @@ function go(name){
   views.forEach(v=>v.classList.toggle("active",v.dataset.view===name));
   bottom.forEach(b=>b.classList.toggle("active",b.dataset.go===name));
   const moreBtn=document.getElementById("moreNavBtn");
-  if(moreBtn) moreBtn.classList.toggle("active",["stock","mechanic"].includes(name));
+  if(moreBtn) moreBtn.classList.toggle("active",["stock","mechanic","finance"].includes(name));
   appBack.hidden=publicMode || ["dashboard","orders","clients"].includes(name);
   window.scrollTo({top:0,behavior:"smooth"});
   if(name==="orders") renderOrders();
@@ -132,6 +133,76 @@ function bindOrderOpeners(){
   });
 }
 
+function kanbanGroup(o){
+  const state=(o.health||"").toLowerCase();
+  if(state) return state;
+  const text=(o.stage+" "+o.status).toLowerCase();
+  if(/pronta|retirada|entregue/.test(text)) return "done";
+  if(/peça/.test(text)) return "waiting_parts";
+  if(/aprovação|cliente/.test(text)) return "waiting_customer";
+  if(/bloque/.test(text)) return "blocked";
+  if(/execução|serviço/.test(text)) return "on_track";
+  return "on_track";
+}
+
+const kanbanColumns=[
+  {key:"overdue",label:"Atrasadas",icon:"●"},
+  {key:"attention",label:"Atenção",icon:"◐"},
+  {key:"waiting_parts",label:"Aguardando peça",icon:"▦"},
+  {key:"waiting_customer",label:"Aguardando cliente",icon:"◌"},
+  {key:"on_track",label:"Em andamento",icon:"▶"},
+  {key:"blocked",label:"Bloqueadas",icon:"Ⅱ"},
+  {key:"done",label:"Prontas",icon:"✓"}
+];
+
+function kanbanCard(o){
+  const blocker=o.blockedReason?'<small class="kanban-blocker">'+escapeHtml(o.blockedReason)+'</small>':"";
+  return '<button class="kanban-card" data-open-os="'+o.id+'">'+
+    '<div class="kanban-card-top"><b>'+escapeHtml(o.plate)+'</b><span>'+escapeHtml(o.ref)+'</span></div>'+
+    '<strong>'+escapeHtml(o.vehicle)+'</strong>'+
+    '<small>'+escapeHtml(o.stage)+'</small>'+
+    '<div class="kanban-meta"><span>Prazo: '+escapeHtml(o.promised||"A definir")+'</span><span>'+escapeHtml(o.owner||"Sem responsável")+'</span></div>'+
+    blocker+
+  '</button>';
+}
+
+function renderKanban(orders){
+  const board=document.getElementById("kanbanBoard");
+  if(!board) return;
+  const groups=new Map(kanbanColumns.map(c=>[c.key,[]]));
+  orders.forEach(o=>{
+    const key=kanbanGroup(o);
+    if(!groups.has(key)) groups.set(key,[]);
+    groups.get(key).push(o);
+  });
+  board.innerHTML=kanbanColumns.map(col=>{
+    const list=groups.get(col.key)||[];
+    return '<section class="kanban-column" data-kanban-column="'+col.key+'">'+
+      '<header><span>'+col.icon+'</span><b>'+col.label+'</b><em>'+list.length+'</em></header>'+
+      '<div class="kanban-column-list">'+(list.length?list.map(kanbanCard).join(""):'<div class="kanban-empty">Sem OS</div>')+'</div>'+
+    '</section>';
+  }).join("");
+
+  const count=(...keys)=>orders.filter(o=>keys.includes(kanbanGroup(o))).length;
+  const overdue=document.getElementById("kanbanOverdueCount");
+  const attention=document.getElementById("kanbanAttentionCount");
+  const blocked=document.getElementById("kanbanBlockedCount");
+  const ready=document.getElementById("kanbanReadyCount");
+  if(overdue) overdue.textContent=count("overdue");
+  if(attention) attention.textContent=count("attention");
+  if(blocked) blocked.textContent=count("blocked","waiting_parts","waiting_customer");
+  if(ready) ready.textContent=count("done");
+
+  board.querySelectorAll("[data-open-os]").forEach(btn=>btn.onclick=()=>openDetail(Number(btn.dataset.openOs)));
+  document.querySelectorAll("[data-kanban-target]").forEach(btn=>btn.onclick=()=>{
+    const target=btn.dataset.kanbanTarget;
+    const column=target==="blocked"
+      ? board.querySelector('[data-kanban-column="waiting_parts"]')
+      : board.querySelector('[data-kanban-column="'+target+'"]');
+    column?.scrollIntoView({behavior:"smooth",inline:"start",block:"nearest"});
+  });
+}
+
 function renderDashboard(){
   const orders=allOrders();
   const open=orders.filter(o=>o.kind!=="ready");
@@ -152,7 +223,9 @@ function renderDashboard(){
     ).join(""):'<div class="attention-clear">✓ Nenhuma pendência crítica agora</div>';
   }
 
-  document.getElementById("dashboardOrders").innerHTML=open.slice(0,3).map(orderCard).join("");
+  renderKanban(orders);
+  const dashboardOrders=document.getElementById("dashboardOrders");
+  if(dashboardOrders) dashboardOrders.innerHTML=open.slice(0,3).map(orderCard).join("");
   bindOrderOpeners();
   queueScrollLock();
 }
@@ -807,6 +880,7 @@ document.getElementById("rejectBudget").addEventListener("click",async()=>{
     else toast("Não foi possível solicitar revisão.");
   }
 });
+document.getElementById("financeReceiptShortcut")?.addEventListener("click",()=>toast("Na v11.2, abre câmera/arquivo para registrar a notinha."));
 document.getElementById("finishService").addEventListener("click",()=>{
   const pending=[...document.querySelectorAll(".task input")].filter(x=>!x.checked).length;
   if(pending){toast("Ainda existem "+pending+" tarefas pendentes.");return}
