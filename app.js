@@ -481,6 +481,56 @@ async function loadOrderHistory(order){
     : '<div class="history-empty">Ainda não há eventos registrados.</div>';
 }
 
+async function loadInspectionPhotos(order){
+  const target=document.getElementById("osInspectionContent");
+  if(!target) return;
+
+  if(!(order.server && staffProfile?.active && supabaseClient)){
+    const inspected=!order.quick;
+    target.innerHTML=inspected
+      ? '<div class="info-block"><span>Vistoria de entrada</span><b>4 fotos obrigatórias registradas</b></div><div class="photo-strip"><div class="photo-thumb">🚗</div><div class="photo-thumb">🚘</div><div class="photo-thumb">↔</div><div class="photo-thumb">↔</div><div class="photo-thumb">＋</div></div>'
+      : '<div class="info-block"><span>Vistoria de entrada</span><b>Pendente</b></div><div class="muted">Sem evidências ainda.</div>';
+    return;
+  }
+
+  target.innerHTML='<div class="inspection-loading">Carregando evidências…</div>';
+  const {data:photos,error}=await supabaseClient
+    .from("inspection_photos")
+    .select("id,slot,phase,storage_path,required,created_at")
+    .eq("work_order_id",order.id)
+    .eq("phase","entry")
+    .order("created_at",{ascending:true});
+  if(error){
+    target.innerHTML='<div class="inspection-loading">Não foi possível carregar as fotos.</div>';
+    return;
+  }
+
+  const rows=[];
+  for(const photo of (photos||[])){
+    const {data:signed}=await supabaseClient.storage.from("oficina-evidence").createSignedUrl(photo.storage_path,600);
+    rows.push({...photo,url:signed?.signedUrl||""});
+  }
+
+  const requiredCount=rows.filter(x=>x.required).length;
+  const slotLabel={front:"Frente",rear:"Traseira",left:"Lateral esquerda",right:"Lateral direita",panel:"Painel / km",other:"Outro"};
+  target.innerHTML=
+    '<div class="info-block"><span>Vistoria de entrada</span><b>'+requiredCount+' de 4 obrigatórias registradas</b></div>'+
+    (rows.length
+      ? '<div class="evidence-grid">'+rows.map(photo=>
+          '<button class="evidence-photo" type="button" data-evidence-url="'+escapeHtml(photo.url)+'">'+
+            (photo.url?'<img src="'+escapeHtml(photo.url)+'" alt="'+escapeHtml(slotLabel[photo.slot]||photo.slot)+'">':'<div class="evidence-missing">Sem prévia</div>')+
+            '<span>'+escapeHtml(slotLabel[photo.slot]||photo.slot)+'</span>'+
+          '</button>'
+        ).join("")+'</div>'
+      : '<div class="inspection-loading">Nenhuma foto registrada nesta OS.</div>');
+
+  target.querySelectorAll("[data-evidence-url]").forEach(btn=>btn.addEventListener("click",()=>{
+    const url=btn.dataset.evidenceUrl;
+    if(url) window.open(url,"_blank","noopener");
+  }));
+}
+
+
 function getDemoApproval(){
   try{
     const record=JSON.parse(localStorage.getItem("oficina-approval-000123")||"null");
@@ -1080,10 +1130,7 @@ function openDetail(id){
         (o.blockedReason?'<div class="info-block operational-alert"><span>Motivo / bloqueio</span><b>'+escapeHtml(o.blockedReason)+'</b></div>':'')+
         (o.quick?'<button class="btn primary full" id="completeEntry">Completar cadastro e vistoria</button>':'')+
       '</section>'+
-      '<section class="tab-pane" data-pane="inspection">'+
-        '<div class="info-block"><span>Vistoria de entrada</span><b>'+(inspected?"4 fotos obrigatórias registradas":"Pendente")+'</b></div>'+
-        '<div class="photo-strip">'+(inspected?'<div class="photo-thumb">🚗</div><div class="photo-thumb">🚘</div><div class="photo-thumb">↔</div><div class="photo-thumb">↔</div><div class="photo-thumb">＋</div>':'<div class="muted">Sem evidências ainda.</div>')+'</div>'+
-      '</section>'+
+      '<section class="tab-pane" data-pane="inspection"><div id="osInspectionContent"><div class="inspection-loading">Carregando evidências…</div></div></section>'+
       '<section class="tab-pane" data-pane="estimate"><div class="info-block"><span>Orçamento</span><b>'+(o.status==="Em orçamento"?"Aguardando aprovação":"Disponível para consulta/edição")+'</b></div><div class="info-block"><span>Acesso rápido</span><b>Use o botão fixo abaixo para abrir o orçamento em qualquer aba.</b></div></section>'+
       '<section class="tab-pane" data-pane="history"><div id="osHistoryList" class="os-history-list"><div class="history-loading">Carregando histórico…</div></div></section>'+
     '</div>'+
@@ -1103,6 +1150,7 @@ function openDetail(id){
   });
   document.getElementById("updateOsProgress")?.addEventListener("click",()=>openOsQuickSheet(o.id));
   loadOrderHistory(o);
+  loadInspectionPhotos(o);
   const complete=document.getElementById("completeEntry");
   if(complete)complete.onclick=()=>{
     document.getElementById("wizCustomer").value=o.customer;
