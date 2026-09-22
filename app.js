@@ -1,7 +1,7 @@
 const demoOrders=[
-  {id:34,ref:"#000123",plate:"ABC1D23",vehicle:"Chevrolet Onix 1.0 2020",customer:"João da Silva",status:"Em orçamento",kind:"waiting",opened:"Hoje 09:12",stage:"Aguardando aprovação",complaint:"Barulho na suspensão dianteira.",health:"waiting_customer",promised:"Hoje 16:30",owner:"Recepção",blockedReason:"Aguardando aprovação do orçamento"},
+  {id:34,ref:"#000123",plate:"ABC1D23",vehicle:"Chevrolet Onix 1.0 2020",customer:"João da Silva",status:"Em orçamento",kind:"waiting",opened:"Hoje 09:12",stage:"Aguardando aprovação",complaint:"Barulho na suspensão dianteira.",health:"waiting_customer",promised:"Hoje 16:30",owner:"Recepção",blockedReason:"Aguardando aprovação do orçamento",blockedSince:new Date(Date.now()-2*60*60*1000).toISOString()},
   {id:31,ref:"#000121",plate:"ABC1D23",vehicle:"Chevrolet Onix 1.0",customer:"João da Silva",status:"Em execução",kind:"service",opened:"Hoje 08:40",stage:"Suspensão dianteira",complaint:"Barulho na dianteira.",health:"attention",promised:"Hoje 17:30",owner:"Turquinho"},
-  {id:28,ref:"#000119",plate:"XY29A12",vehicle:"Hyundai HB20",customer:"Ana Paula",status:"Aguardando",kind:"waiting",opened:"20/09 16:10",stage:"Aguardando peça",complaint:"Revisão preventiva.",health:"waiting_parts",promised:"Amanhã 12:00",owner:"Turquinho",blockedReason:"Fornecedor confirmou peça para amanhã"},
+  {id:28,ref:"#000119",plate:"XY29A12",vehicle:"Hyundai HB20",customer:"Ana Paula",status:"Aguardando",kind:"waiting",opened:"20/09 16:10",stage:"Aguardando peça",complaint:"Revisão preventiva.",health:"waiting_parts",promised:"Amanhã 12:00",owner:"Turquinho",blockedReason:"Fornecedor confirmou peça para amanhã",blockedSince:new Date(Date.now()-5*60*60*1000).toISOString()},
   {id:25,ref:"#000116",plate:"DEF4G56",vehicle:"Honda Civic",customer:"Marcos Silva",status:"Pronta",kind:"ready",opened:"20/09 10:05",stage:"Aguardando retirada",complaint:"Freio dianteiro.",health:"done",promised:"Hoje 11:00",owner:"Recepção"},
   {id:24,ref:"#000115",plate:"GOL2H77",vehicle:"Volkswagen Gol 1.6",customer:"Carlos Mendes",status:"Em execução",kind:"service",opened:"19/09 14:25",stage:"Arrefecimento",complaint:"Aquecendo acima do normal.",health:"overdue",promised:"Ontem 17:00",owner:"Turquinho"}
 ];
@@ -243,6 +243,8 @@ function mapServerOrder(row){
     forecast:shortDateTime(row.forecast_at),
     owner:"Equipe",
     blockedReason:row.blocked_reason||"",
+    blockedSince:row.blocked_since||null,
+    nextReview:shortDateTime(row.next_review_at),
     raw:row
   };
 }
@@ -252,7 +254,7 @@ async function syncServerData({quiet=false}={}){
   try{
     const {data:rows,error}=await supabaseClient
       .from("work_orders")
-      .select("id,number,customer_id,vehicle_id,status,complaint,current_km,created_at,customer_promised_at,forecast_at,operational_state,blocked_reason,priority,customers(id,name,phone),vehicles(id,plate,make,model,version,year,km)")
+      .select("id,number,customer_id,vehicle_id,status,complaint,current_km,created_at,customer_promised_at,forecast_at,operational_state,blocked_since,blocked_reason,next_review_at,priority,customers(id,name,phone),vehicles(id,plate,make,model,version,year,km)")
       .order("created_at",{ascending:false});
     if(error) throw error;
     serverOrders=(rows||[]).map(mapServerOrder);
@@ -514,12 +516,16 @@ function orderCard(o){
       '<div class="compact-order-copy"><b>'+escapeHtml(o.vehicle)+'</b><span>'+escapeHtml(o.customer)+' · '+escapeHtml(o.stage)+'</span></div>'+
       statusBadge(o.status)+
     '</button>'+
-    '<button class="context-action" data-order-action="'+o.id+'">'+contextualAction(o)+'</button>'+
+    '<div class="compact-card-actions"><button class="context-action" data-order-action="'+o.id+'">'+contextualAction(o)+'</button><button class="compact-quick" data-quick-os="'+o.id+'" aria-label="Atualizar andamento">•••</button></div>'+
   '</article>';
 }
 
 function bindOrderOpeners(){
   document.querySelectorAll("[data-open-os]").forEach(btn=>btn.onclick=()=>openDetail(btn.dataset.openOs));
+  document.querySelectorAll("[data-quick-os]").forEach(btn=>btn.onclick=event=>{
+    event.stopPropagation();
+    openOsQuickSheet(btn.dataset.quickOs);
+  });
   document.querySelectorAll("[data-order-action]").forEach(btn=>btn.onclick=()=>{
     const o=allOrders().find(x=>String(x.id)===String(btn.dataset.orderAction));
     if(!o) return;
@@ -563,6 +569,30 @@ const stageDefinitions=[
   {key:"ready",label:"Prontas",title:"Prontas para retirada",subtitle:"Serviço concluído"}
 ];
 
+function compactDuration(ms){
+  const abs=Math.max(0,Math.round(ms/60000));
+  if(abs<60) return abs+"min";
+  const h=Math.round(abs/60);
+  if(h<24) return h+"h";
+  const d=Math.round(h/24);
+  return d+"d";
+}
+function healthTimingLabel(o){
+  const health=kanbanHealth(o);
+  const raw=o.raw||{};
+  if(["waiting_parts","waiting_customer","blocked"].includes(health) && (o.blockedSince||raw.blocked_since)){
+    const since=new Date(o.blockedSince||raw.blocked_since).getTime();
+    if(Number.isFinite(since)) return "há "+compactDuration(Date.now()-since);
+  }
+  const deadline=raw.customer_promised_at?new Date(raw.customer_promised_at).getTime():NaN;
+  if(Number.isFinite(deadline)){
+    const delta=deadline-Date.now();
+    if(delta<0) return compactDuration(-delta)+" atrasada";
+    if(delta<=6*60*60*1000) return "vence em "+compactDuration(delta);
+  }
+  return "";
+}
+
 function healthInfo(o){
   const health=kanbanHealth(o);
   const map={
@@ -592,6 +622,7 @@ function priorityRank(o){
 
 function kanbanCard(o){
   const health=healthInfo(o);
+  const timing=healthTimingLabel(o);
   const forecast=o.forecast && o.forecast!=="A definir" && o.forecast!==o.promised
     ? '<span><em>Previsão</em>'+escapeHtml(o.forecast)+'</span>'
     : "";
@@ -605,7 +636,7 @@ function kanbanCard(o){
         '<strong>'+escapeHtml(o.vehicle)+'</strong>'+
         '<small>'+escapeHtml(o.stage)+'</small>'+
       '</div>'+
-      '<span class="health-badge '+health.cls+'"><i>'+health.icon+'</i>'+health.label+'</span>'+
+      '<span class="health-badge '+health.cls+'"><i>'+health.icon+'</i><span>'+health.label+(timing?'<small>'+escapeHtml(timing)+'</small>':'')+'</span></span>'+
       '<div class="flow-times">'+
         '<span><em>Prazo cliente</em>'+escapeHtml(o.promised||"A definir")+'</span>'+
         forecast+
@@ -645,6 +676,20 @@ function renderKanban(orders){
   document.getElementById("kanbanAttentionCount").textContent=count("attention");
   document.getElementById("kanbanBlockedCount").textContent=count("blocked","waiting_parts","waiting_customer");
   document.getElementById("kanbanReadyCount").textContent=count("done");
+
+  const stageCountMap={
+    stageCountToday:orders.filter(o=>kanbanStage(o)!=="ready"||kanbanHealth(o)==="done").length,
+    stageCountEntry:orders.filter(o=>kanbanStage(o)==="entry").length,
+    stageCountBudget:orders.filter(o=>kanbanStage(o)==="budget").length,
+    stageCountCustomer:orders.filter(o=>kanbanStage(o)==="waiting_customer").length,
+    stageCountParts:orders.filter(o=>kanbanStage(o)==="waiting_parts").length,
+    stageCountService:orders.filter(o=>kanbanStage(o)==="service").length,
+    stageCountReady:orders.filter(o=>kanbanStage(o)==="ready").length
+  };
+  Object.entries(stageCountMap).forEach(([id,value])=>{
+    const el=document.getElementById(id);
+    if(el) el.textContent=value;
+  });
 
   const stage=stageDefinitions.find(x=>x.key===currentKanbanStage)||stageDefinitions[0];
   const list=filteredKanbanOrders(orders);
