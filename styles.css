@@ -954,3 +954,6 @@ body.no-scroll .os-global-actions{
   .approval-summary-compact strong{font-size:21px}
   .compact-decision{grid-template-columns:1fr 96px}
 }
+
+/* ===== v11 real backend feedback ===== */
+.approval-summary-compact.loading{opacity:.7}
