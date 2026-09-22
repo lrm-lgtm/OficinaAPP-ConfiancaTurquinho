@@ -36,7 +36,9 @@ function go(name){
   document.body.classList.toggle("public-mode",publicMode);
   views.forEach(v=>v.classList.toggle("active",v.dataset.view===name));
   bottom.forEach(b=>b.classList.toggle("active",b.dataset.go===name));
-  appBack.hidden=publicMode || ["dashboard","orders","clients","stock"].includes(name);
+  const moreBtn=document.getElementById("moreNavBtn");
+  if(moreBtn) moreBtn.classList.toggle("active",["stock","mechanic"].includes(name));
+  appBack.hidden=publicMode || ["dashboard","orders","clients"].includes(name);
   window.scrollTo({top:0,behavior:"smooth"});
   if(name==="orders") renderOrders();
   if(name==="clients") renderClients();
@@ -49,9 +51,9 @@ appBack.addEventListener("click",()=>go(previousView==="client-approval"?"budget
 
 function statusBadge(status){
   let cls="open";
-  if(/execução/i.test(status)) cls="service";
+  if(/execução|aprovado/i.test(status)) cls="service";
   else if(/pronta/i.test(status)) cls="ready";
-  else if(/aguard|orçamento/i.test(status)) cls="waiting";
+  else if(/aguard|orçamento|revisão/i.test(status)) cls="waiting";
   return '<span class="status '+cls+'">'+status+"</span>";
 }
 
@@ -73,20 +75,55 @@ function allClients(){
   return [...JSON.parse(localStorage.getItem("oficina-clients")||"[]"),...demoClients];
 }
 
+function contextualAction(o){
+  if(/aprovação|orçamento/i.test(o.stage+" "+o.status)) return "Enviar link";
+  if(/execução|liberado/i.test(o.stage+" "+o.status)) return "Abrir";
+  if(/pronta|retirada/i.test(o.stage+" "+o.status)) return "Entrega";
+  return "Continuar";
+}
+
 function orderCard(o){
-  return '<button class="order-card" data-open-os="'+o.id+'">'+
-    '<div class="order-top"><div><small>'+o.ref+" · "+o.plate+'</small><h3>'+o.vehicle+'</h3><small>'+o.customer+"</small></div>"+statusBadge(o.status)+"</div>"+
-    '<div class="order-meta"><span>'+o.opened+'</span><span>'+o.stage+"</span></div></button>";
+  return '<article class="compact-order-card">'+
+    '<button class="compact-order-main" data-open-os="'+o.id+'">'+
+      '<div class="compact-order-id"><b>'+o.plate+'</b><span>'+o.ref+'</span></div>'+
+      '<div class="compact-order-copy"><b>'+escapeHtml(o.vehicle)+'</b><span>'+escapeHtml(o.customer)+' · '+escapeHtml(o.stage)+'</span></div>'+
+      statusBadge(o.status)+
+    '</button>'+
+    '<button class="context-action" data-order-action="'+o.id+'">'+contextualAction(o)+'</button>'+
+  '</article>';
 }
 
 function bindOrderOpeners(){
   document.querySelectorAll("[data-open-os]").forEach(btn=>btn.onclick=()=>openDetail(Number(btn.dataset.openOs)));
+  document.querySelectorAll("[data-order-action]").forEach(btn=>btn.onclick=()=>{
+    const o=allOrders().find(x=>x.id===Number(btn.dataset.orderAction));
+    if(!o) return;
+    if(/aprovação|orçamento/i.test(o.stage+" "+o.status)) go("budget");
+    else openDetail(o.id);
+  });
 }
 
 function renderDashboard(){
   const orders=allOrders();
-  document.getElementById("openCount").textContent=orders.filter(o=>o.kind!=="ready").length;
-  document.getElementById("dashboardOrders").innerHTML=orders.slice(0,3).map(orderCard).join("");
+  const open=orders.filter(o=>o.kind!=="ready");
+  const budgets=orders.filter(o=>/aprovação|orçamento|revisão/i.test(o.stage+" "+o.status));
+  const service=orders.filter(o=>/execução|liberado|aprovado/i.test(o.stage+" "+o.status));
+  document.getElementById("openCount").textContent=open.length;
+  const budgetCount=document.getElementById("budgetCount");
+  const serviceCount=document.getElementById("serviceCount");
+  if(budgetCount) budgetCount.textContent=budgets.length;
+  if(serviceCount) serviceCount.textContent=service.length;
+
+  const attention=[...budgets,...orders.filter(o=>/peça|pendente|retirada/i.test(o.stage))];
+  const unique=[...new Map(attention.map(o=>[o.id,o])).values()].slice(0,2);
+  const attentionEl=document.getElementById("attentionList");
+  if(attentionEl){
+    attentionEl.innerHTML=unique.length?unique.map(o=>
+      '<button class="attention-item" data-open-os="'+o.id+'"><span class="attention-dot"></span><div><b>'+escapeHtml(o.plate)+' · '+escapeHtml(o.vehicle)+'</b><small>'+escapeHtml(o.stage)+'</small></div><em>›</em></button>'
+    ).join(""):'<div class="attention-clear">✓ Nenhuma pendência crítica agora</div>';
+  }
+
+  document.getElementById("dashboardOrders").innerHTML=open.slice(0,3).map(orderCard).join("");
   bindOrderOpeners();
 }
 
@@ -378,6 +415,60 @@ window.addEventListener("hashchange",()=>{
   if(location.hash==="#aprovar") go("client-approval");
   else if(currentView==="client-approval") go("dashboard");
 });
+
+// ---- v10 compact interaction layer ----
+const quickActionSheet=document.getElementById("quickActionSheet");
+const moreSheet=document.getElementById("moreSheet");
+const searchSheet=document.getElementById("searchSheet");
+
+function openSheet(sheet){
+  if(!sheet) return;
+  [quickActionSheet,moreSheet,searchSheet].forEach(s=>{if(s && s!==sheet)s.hidden=true});
+  sheet.hidden=false;
+  document.body.classList.add("sheet-open");
+}
+function closeSheets(){
+  [quickActionSheet,moreSheet,searchSheet].forEach(s=>{if(s)s.hidden=true});
+  document.body.classList.remove("sheet-open");
+}
+document.querySelectorAll("[data-close-sheet]").forEach(btn=>btn.addEventListener("click",closeSheets));
+document.getElementById("quickActionBtn")?.addEventListener("click",()=>openSheet(quickActionSheet));
+document.getElementById("moreNavBtn")?.addEventListener("click",()=>openSheet(moreSheet));
+document.getElementById("globalSearchBtn")?.addEventListener("click",()=>{
+  openSheet(searchSheet);
+  setTimeout(()=>document.getElementById("globalSearchInput")?.focus(),80);
+});
+document.querySelectorAll("[data-sheet-go]").forEach(btn=>btn.addEventListener("click",()=>{
+  closeSheets();go(btn.dataset.sheetGo);
+}));
+document.querySelector("[data-sheet-client]")?.addEventListener("click",()=>{
+  closeSheets();modal.hidden=false;
+});
+
+const globalSearchInput=document.getElementById("globalSearchInput");
+globalSearchInput?.addEventListener("input",()=>{
+  const q=globalSearchInput.value.toLowerCase().trim();
+  const results=document.getElementById("globalSearchResults");
+  if(!q){results.innerHTML='<div class="search-empty">Digite placa, cliente, OS ou veículo.</div>';return}
+  const matches=allOrders().filter(o=>[o.ref,o.plate,o.vehicle,o.customer,o.status,o.stage].join(" ").toLowerCase().includes(q)).slice(0,5);
+  results.innerHTML=matches.length?matches.map(orderCard).join(""):'<div class="search-empty">Nenhuma OS encontrada.</div>';
+  bindOrderOpeners();
+});
+
+// Hide bottom navigation while scrolling down; show again on upward scroll.
+let lastScrollY=window.scrollY;
+window.addEventListener("scroll",()=>{
+  if(document.body.classList.contains("sheet-open")||document.body.classList.contains("public-mode")) return;
+  const y=window.scrollY;
+  const nav=document.querySelector(".bottomnav");
+  if(!nav) return;
+  if(y>lastScrollY+8 && y>120) nav.classList.add("nav-hidden");
+  else if(y<lastScrollY-8) nav.classList.remove("nav-hidden");
+  lastScrollY=y;
+},{passive:true});
+
+// Close sheets on Escape.
+window.addEventListener("keydown",e=>{if(e.key==="Escape")closeSheets()});
 
 renderDashboard();
 renderOrders();
