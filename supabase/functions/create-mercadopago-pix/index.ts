@@ -26,8 +26,16 @@ Deno.serve(async (req) => {
     const userClient = createClient(url, anon, {
       global: { headers: { Authorization: authHeader } },
     });
-    const { data: allowed, error: staffError } = await userClient.rpc("is_active_staff");
-    if (staffError || allowed !== true) return json({ error: "staff_access_required" }, 403);
+    const { data: authData, error: authError } = await userClient.auth.getUser();
+    const userId = authData.user?.id || null;
+    if (authError || !userId) return json({ error: "authorization_required" }, 401);
+
+    const { data: staffProfile, error: staffError } = await userClient
+      .from("staff_profiles")
+      .select("id,active")
+      .eq("id",userId)
+      .maybeSingle();
+    if (staffError || !staffProfile?.active) return json({ error: "staff_access_required" }, 403);
 
     if (!mpAccessToken) return json({ error: "provider_not_configured", provider: "mercadopago" }, 503);
 
@@ -44,9 +52,6 @@ Deno.serve(async (req) => {
     }
 
     const admin = createClient(url, serviceRole);
-    const { data: authData } = await userClient.auth.getUser();
-    const userId = authData.user?.id || null;
-
     const { data: requestRow, error: insertError } = await admin
       .from("payment_requests")
       .insert({
