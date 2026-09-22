@@ -44,7 +44,6 @@ function go(name){
   if(name==="clients") renderClients();
   if(name==="new-os") setWizardStep(1);
   if(name==="client-approval") renderApprovalState();
-queueScrollLock();
   queueScrollLock();
 }
 
@@ -385,6 +384,13 @@ function resetWizard(){
   updatePhotoProgress();setWizardStep(1);
 }
 
+function budgetActionLabel(o){
+  const state=(o.status+" "+o.stage).toLowerCase();
+  if(state.includes("aprovado")||state.includes("liberado")) return "Ver orçamento aprovado";
+  if(state.includes("aprovação")||state.includes("orçamento")||state.includes("revisão")) return "Abrir orçamento";
+  return "Ir para orçamento";
+}
+
 function openDetail(id){
   const o=allOrders().find(x=>x.id===id)||demoOrders[0];
   const inspected=!o.quick;
@@ -404,13 +410,17 @@ function openDetail(id){
         '<div class="info-block"><span>Vistoria de entrada</span><b>'+(inspected?"4 fotos obrigatórias registradas":"Pendente")+'</b></div>'+
         '<div class="photo-strip">'+(inspected?'<div class="photo-thumb">🚗</div><div class="photo-thumb">🚘</div><div class="photo-thumb">↔</div><div class="photo-thumb">↔</div><div class="photo-thumb">＋</div>':'<div class="muted">Sem evidências ainda.</div>')+'</div>'+
       '</section>'+
-      '<section class="tab-pane" data-pane="estimate"><div class="info-block"><span>Orçamento</span><b>'+(o.status==="Em orçamento"?"Aguardando aprovação":"Ainda não enviado")+'</b></div><button class="btn primary full" data-go="budget">Abrir orçamento</button></section>'+
+      '<section class="tab-pane" data-pane="estimate"><div class="info-block"><span>Orçamento</span><b>'+(o.status==="Em orçamento"?"Aguardando aprovação":"Disponível para consulta/edição")+'</b></div><div class="info-block"><span>Acesso rápido</span><b>Use o botão fixo abaixo para abrir o orçamento em qualquer aba.</b></div></section>'+
       '<section class="tab-pane" data-pane="history"><div class="info-block"><span>Agora</span><b>OS criada</b></div>'+(inspected?'<div class="info-block"><span>Agora</span><b>Vistoria inicial concluída</b></div>':'')+'</section>'+
+    '</div>'+
+    '<div class="os-global-actions">'+
+      '<button class="btn primary full os-budget-shortcut" data-go="budget"><span>R$</span>'+budgetActionLabel(o)+'</button>'+
     '</div>'+
   '</article>';
   detail.querySelectorAll("[data-os-tab]").forEach(btn=>btn.addEventListener("click",()=>{
     detail.querySelectorAll("[data-os-tab]").forEach(x=>x.classList.toggle("active",x===btn));
     detail.querySelectorAll(".tab-pane").forEach(p=>p.classList.toggle("active",p.dataset.pane===btn.dataset.osTab));
+    queueScrollLock();
   }));
   detail.querySelectorAll("[data-go]").forEach(btn=>btn.onclick=()=>go(btn.dataset.go));
   const complete=document.getElementById("completeEntry");
