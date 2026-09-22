@@ -43,7 +43,10 @@ function go(name){
   if(name==="orders") renderOrders();
   if(name==="clients") renderClients();
   if(name==="new-os") setWizardStep(1);
-  if(name==="client-approval") renderApprovalState();
+  if(name==="client-approval"){
+    renderApprovalState();
+    setTimeout(resizeApprovalSignature,60);
+  }
   queueScrollLock();
 }
 
@@ -439,17 +442,99 @@ document.getElementById("copyApproval").addEventListener("click",async()=>{
   try{await navigator.clipboard.writeText(link);toast("Link de aprovação copiado.");}
   catch{toast("Link pronto para compartilhar.");}
 });
+// ---- handwritten approval signature ----
+const approvalSignature=document.getElementById("approvalSignature");
+const signatureBlock=document.getElementById("signatureBlock");
+const signaturePlaceholder=document.getElementById("signaturePlaceholder");
+const clearSignatureBtn=document.getElementById("clearSignature");
+const approvalConsent=document.getElementById("approvalConsent");
+let signatureCtx=null;
+let signatureDrawing=false;
+let signatureHasInk=false;
+let signatureLastPoint=null;
+
+function resizeApprovalSignature(){
+  if(!approvalSignature) return;
+  const rect=approvalSignature.getBoundingClientRect();
+  const ratio=Math.max(1,window.devicePixelRatio||1);
+  const snapshot=signatureHasInk?approvalSignature.toDataURL("image/png"):null;
+  approvalSignature.width=Math.max(1,Math.round(rect.width*ratio));
+  approvalSignature.height=Math.max(1,Math.round(rect.height*ratio));
+  signatureCtx=approvalSignature.getContext("2d");
+  signatureCtx.setTransform(ratio,0,0,ratio,0,0);
+  signatureCtx.lineWidth=2.2;
+  signatureCtx.lineCap="round";
+  signatureCtx.lineJoin="round";
+  signatureCtx.strokeStyle="#111";
+  if(snapshot){
+    const img=new Image();
+    img.onload=()=>signatureCtx.drawImage(img,0,0,rect.width,rect.height);
+    img.src=snapshot;
+  }
+}
+function signaturePoint(event){
+  const rect=approvalSignature.getBoundingClientRect();
+  return {x:event.clientX-rect.left,y:event.clientY-rect.top};
+}
+function clearApprovalSignature(){
+  if(!approvalSignature||!signatureCtx) return;
+  const rect=approvalSignature.getBoundingClientRect();
+  signatureCtx.clearRect(0,0,rect.width,rect.height);
+  signatureHasInk=false;
+  signatureLastPoint=null;
+  signatureBlock?.classList.remove("signed");
+}
+function signatureStart(event){
+  if(!signatureCtx) resizeApprovalSignature();
+  signatureDrawing=true;
+  signatureLastPoint=signaturePoint(event);
+  approvalSignature.setPointerCapture?.(event.pointerId);
+  event.preventDefault();
+}
+function signatureMove(event){
+  if(!signatureDrawing||!signatureCtx||!signatureLastPoint) return;
+  const point=signaturePoint(event);
+  signatureCtx.beginPath();
+  signatureCtx.moveTo(signatureLastPoint.x,signatureLastPoint.y);
+  signatureCtx.lineTo(point.x,point.y);
+  signatureCtx.stroke();
+  signatureLastPoint=point;
+  signatureHasInk=true;
+  signatureBlock?.classList.add("signed");
+  event.preventDefault();
+}
+function signatureEnd(event){
+  signatureDrawing=false;
+  signatureLastPoint=null;
+  try{approvalSignature.releasePointerCapture?.(event.pointerId)}catch{}
+}
+if(approvalSignature){
+  approvalSignature.addEventListener("pointerdown",signatureStart);
+  approvalSignature.addEventListener("pointermove",signatureMove);
+  approvalSignature.addEventListener("pointerup",signatureEnd);
+  approvalSignature.addEventListener("pointercancel",signatureEnd);
+  clearSignatureBtn?.addEventListener("click",clearApprovalSignature);
+  window.addEventListener("resize",()=>setTimeout(resizeApprovalSignature,60),{passive:true});
+  setTimeout(resizeApprovalSignature,80);
+}
+function getSignatureData(){
+  return signatureHasInk&&approvalSignature?approvalSignature.toDataURL("image/png"):null;
+}
+
 function formatDecisionTime(iso){
   try{return new Intl.DateTimeFormat("pt-BR",{dateStyle:"short",timeStyle:"short"}).format(new Date(iso))}catch{return ""}
 }
-function saveDemoApproval(status,name){
+function saveDemoApproval(status,name,signatureData=null){
   const record={
     budget:"000123",
     revision:2,
     amount:720,
     status,
     name,
-    decidedAt:new Date().toISOString()
+    signatureData,
+    consent:Boolean(approvalConsent?.checked),
+    decidedAt:new Date().toISOString(),
+    userAgent:navigator.userAgent
   };
   localStorage.setItem("oficina-approval-000123",JSON.stringify(record));
   renderApprovalState();
@@ -464,6 +549,13 @@ function renderApprovalState(){
   if(!record){
     input.disabled=false;
     actions.hidden=false;
+    if(approvalConsent){approvalConsent.checked=false;approvalConsent.disabled=false}
+    signatureBlock?.classList.remove("approval-locked");
+    if(approvalSignature){
+      approvalSignature.style.pointerEvents="auto";
+      setTimeout(()=>{resizeApprovalSignature();clearApprovalSignature()},40);
+    }
+    if(clearSignatureBtn) clearSignatureBtn.hidden=false;
     out.className="decision-result";
     out.innerHTML="";
     return;
@@ -471,9 +563,12 @@ function renderApprovalState(){
   input.value=record.name||input.value;
   input.disabled=true;
   actions.hidden=true;
+  if(approvalConsent){approvalConsent.checked=Boolean(record.consent);approvalConsent.disabled=true}
+  if(approvalSignature) approvalSignature.style.pointerEvents="none";
+  if(clearSignatureBtn) clearSignatureBtn.hidden=true;
   if(record.status==="approved"){
     out.className="decision-result decision-card approved";
-    out.innerHTML='<b>✓ Orçamento aprovado</b><span>Revisão '+record.revision+' · R$ '+record.amount.toFixed(2).replace(".",",")+'</span><span>Confirmado por '+escapeHtml(record.name)+' em '+formatDecisionTime(record.decidedAt)+'</span><small>A oficina já pode visualizar esta decisão na demonstração.</small>';
+    out.innerHTML='<b>✓ Orçamento assinado e aprovado</b><span>Revisão '+record.revision+' · R$ '+record.amount.toFixed(2).replace(".",",")+'</span><span>Confirmado por '+escapeHtml(record.name)+' em '+formatDecisionTime(record.decidedAt)+'</span>'+(record.signatureData?'<div class="signature-receipt"><img src="'+record.signatureData+'" alt="Assinatura registrada"></div>':'')+'<small>A oficina já pode visualizar esta decisão na demonstração.</small>';
   }else{
     out.className="decision-result decision-card revision";
     out.innerHTML='<b>↺ Revisão solicitada</b><span>Revisão '+record.revision+' · R$ '+record.amount.toFixed(2).replace(".",",")+'</span><span>Solicitado por '+escapeHtml(record.name)+' em '+formatDecisionTime(record.decidedAt)+'</span><small>A oficina deve ajustar o orçamento e enviar uma nova revisão.</small>';
@@ -482,7 +577,10 @@ function renderApprovalState(){
 document.getElementById("approveBudget").addEventListener("click",()=>{
   const name=document.getElementById("approvalName").value.trim();
   if(!name){toast("Informe o nome para aprovar.");return}
-  saveDemoApproval("approved",name);
+  if(!signatureHasInk){toast("Assine no quadro antes de aprovar.");return}
+  if(!approvalConsent?.checked){toast("Marque a confirmação de leitura e autorização.");return}
+  const signatureData=getSignatureData();
+  saveDemoApproval("approved",name,signatureData);
 });
 document.getElementById("rejectBudget").addEventListener("click",()=>{
   const name=document.getElementById("approvalName").value.trim()||"Cliente";
