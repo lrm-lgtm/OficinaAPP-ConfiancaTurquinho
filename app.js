@@ -15,6 +15,7 @@ const demoClients=[
 const V11_SUPABASE_URL="https://koybcvdrbebeicxzitcf.supabase.co";
 const V11_PUBLIC_BUDGET_ENDPOINT=V11_SUPABASE_URL+"/functions/v1/public-budget";
 const V11_APPROVE_BUDGET_ENDPOINT=V11_SUPABASE_URL+"/functions/v1/approve-budget";
+const V11_CREATE_PIX_ENDPOINT=V11_SUPABASE_URL+"/functions/v1/create-mercadopago-pix";
 const V11_PILOT_APPROVAL_TOKEN="59de1bbc-cf56-4579-a72b-a8f8e46cfe9d";
 const V11_SUPABASE_PUBLISHABLE_KEY="sb_publishable_MxXw0bpUQ0RIXkhwFsILHw_TteIueoe";
 const supabaseClient=window.supabase?.createClient
@@ -144,7 +145,6 @@ function go(name){
   if(name==="new-os") setWizardStep(1);
   if(name==="client-approval"){
     renderApprovalState();
-refreshStaffSession();
     loadPublicBudgetFromServer();
     setTimeout(resizeApprovalSignature,60);
   }
@@ -656,10 +656,12 @@ async function loadPublicBudgetFromServer(){
     renderApprovalState();
     renderDashboard();
     renderOrders();
+    return payload;
   }catch(error){
     if(meta) meta.textContent="Não foi possível carregar o orçamento";
     if(items) items.innerHTML='<div><span>Erro ao carregar</span><b>!</b></div>';
     toast("Falha ao carregar orçamento real.");
+    return null;
   }
 }
 
@@ -686,6 +688,102 @@ async function sendRealApproval(decision,name,signatureData){
   };
   return payload;
 }
+
+// ---- v11.4 Mercado Pago Pix shell ----
+const pixPaymentSheet=document.getElementById("pixPaymentSheet");
+const pixPaymentForm=document.getElementById("pixPaymentForm");
+const pixProviderStatus=document.getElementById("pixProviderStatus");
+const pixResult=document.getElementById("pixResult");
+let lastPixCode="";
+
+async function ensurePilotBudgetLoaded(){
+  if(remoteBudgetState) return remoteBudgetState;
+  const payload=await loadPublicBudgetFromServer();
+  return payload?.budget||remoteBudgetState;
+}
+
+async function createMercadoPagoPix(){
+  const budget=await ensurePilotBudgetLoaded();
+  if(!budget){
+    pixProviderStatus.textContent="Não foi possível localizar o orçamento no servidor.";
+    return;
+  }
+  await refreshStaffSession();
+  if(!staffSession?.access_token || !staffProfile?.active){
+    pixProviderStatus.textContent="Entre com um usuário interno liberado antes de gerar a cobrança.";
+    openSheet(staffAuthSheet);
+    return;
+  }
+
+  const payerEmail=document.getElementById("pixPayerEmail").value.trim();
+  const payerDocument=document.getElementById("pixPayerDocument").value.trim();
+  const amount=Number(budget.total||0);
+  const order=budget.order||{};
+  if(!payerEmail || amount<=0){
+    pixProviderStatus.textContent="Informe o e-mail do pagador e confira o valor.";
+    return;
+  }
+
+  document.getElementById("createPixBtn").disabled=true;
+  pixProviderStatus.textContent="Criando cobrança no Mercado Pago…";
+  try{
+    const response=await fetch(V11_CREATE_PIX_ENDPOINT,{
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "Authorization":"Bearer "+staffSession.access_token,
+        "apikey":V11_SUPABASE_PUBLISHABLE_KEY
+      },
+      body:JSON.stringify({
+        work_order_id:order.id,
+        budget_revision_id:budget.id,
+        amount,
+        payer_email:payerEmail,
+        payer_document:payerDocument,
+        description:"Auto Mecânica Confiança · OS #"+String(order.number||"")
+      })
+    });
+    const payload=await response.json();
+    if(!response.ok){
+      if(payload.error==="provider_not_configured"){
+        pixProviderStatus.textContent="Mercado Pago preparado, mas ainda falta conectar as credenciais da conta.";
+      }else if(payload.error==="staff_access_required"){
+        pixProviderStatus.textContent="Seu usuário ainda não foi liberado para operações internas.";
+      }else{
+        pixProviderStatus.textContent="Falha ao criar cobrança: "+(payload.error||"erro desconhecido");
+      }
+      return;
+    }
+
+    lastPixCode=payload.pix?.copy_paste||"";
+    document.getElementById("pixCopyPaste").value=lastPixCode;
+    const qr=document.getElementById("pixQrImage");
+    if(payload.pix?.qr_code_base64){
+      qr.src="data:image/png;base64,"+payload.pix.qr_code_base64;
+      qr.hidden=false;
+    }else qr.hidden=true;
+    pixResult.hidden=false;
+    pixProviderStatus.textContent="Cobrança criada. Status: "+payload.status+".";
+  }catch(error){
+    pixProviderStatus.textContent="Não foi possível falar com o gateway agora.";
+  }finally{
+    document.getElementById("createPixBtn").disabled=false;
+  }
+}
+
+document.getElementById("openPixPayment")?.addEventListener("click",async()=>{
+  const budget=await ensurePilotBudgetLoaded();
+  if(budget) document.getElementById("pixPaymentAmount").textContent=moneyBR(budget.total);
+  pixResult.hidden=true;
+  lastPixCode="";
+  openSheet(pixPaymentSheet);
+});
+pixPaymentForm?.addEventListener("submit",event=>{event.preventDefault();createMercadoPagoPix()});
+document.getElementById("copyPixCode")?.addEventListener("click",async()=>{
+  if(!lastPixCode) return;
+  try{await navigator.clipboard.writeText(lastPixCode);toast("Código Pix copiado.");}
+  catch{toast("Selecione e copie o código Pix.");}
+});
 
 // ---- handwritten approval signature v10.5 ----
 const approvalSignature=document.getElementById("approvalSignature");
@@ -1124,13 +1222,13 @@ const staffAuthSheet=document.getElementById("staffAuthSheet");
 
 function openSheet(sheet){
   if(!sheet) return;
-  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,staffAuthSheet].forEach(s=>{if(s && s!==sheet)s.hidden=true});
+  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,staffAuthSheet,pixPaymentSheet].forEach(s=>{if(s && s!==sheet)s.hidden=true});
   sheet.hidden=false;
   document.body.classList.add("sheet-open");
   document.body.classList.remove("no-scroll");
 }
 function closeSheets(){
-  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,staffAuthSheet].forEach(s=>{if(s)s.hidden=true});
+  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,staffAuthSheet,pixPaymentSheet].forEach(s=>{if(s)s.hidden=true});
   document.body.classList.remove("sheet-open");
   queueScrollLock();
 }
@@ -1189,3 +1287,4 @@ renderClients();
 renderFinance();
 updatePhotoProgress();
 renderApprovalState();
+refreshStaffSession();
