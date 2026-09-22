@@ -396,6 +396,82 @@ function applyKanbanOverride(o){
   return patch?{...o,...patch}:o;
 }
 
+function localOrderHistory(){
+  try{return JSON.parse(localStorage.getItem("oficina-os-history")||"{}")}catch{return {}}
+}
+function appendLocalOrderHistory(id,eventType,payload={}){
+  const all=localOrderHistory();
+  const key=String(id);
+  all[key]=all[key]||[];
+  all[key].unshift({
+    event_type:eventType,
+    payload,
+    actor_type:"user",
+    created_at:new Date().toISOString()
+  });
+  all[key]=all[key].slice(0,40);
+  localStorage.setItem("oficina-os-history",JSON.stringify(all));
+}
+function historyLabel(eventType){
+  return ({
+    work_order_created:"OS criada",
+    work_order_quick_created:"OS rápida criada",
+    kanban_fields_initialized:"Prazo operacional iniciado",
+    work_order_operational_updated:"Andamento atualizado",
+    budget_approved:"Orçamento aprovado pelo cliente",
+    budget_revision_requested:"Cliente solicitou revisão",
+    inspection_completed:"Vistoria concluída"
+  })[eventType]||"Atualização da OS";
+}
+function historyDetail(row){
+  const p=row.payload||{};
+  if(row.event_type==="work_order_operational_updated"){
+    const bits=[];
+    if(p.reason) bits.push(p.reason);
+    if(p.customer_promised_at) bits.push("Prazo: "+shortDateTime(p.customer_promised_at));
+    if(p.forecast_at) bits.push("Previsão: "+shortDateTime(p.forecast_at));
+    return bits.join(" · ")||"Situação operacional alterada.";
+  }
+  if(row.event_type==="budget_approved") return "Revisão "+(p.revision||"—")+" · "+moneyBR(p.total||0);
+  if(row.event_type==="budget_revision_requested") return "Orçamento devolvido para ajuste.";
+  return p.inspection?"Vistoria de entrada registrada.":"";
+}
+async function loadOrderHistory(order){
+  const target=document.getElementById("osHistoryList");
+  if(!target) return;
+
+  let rows=[];
+  if(order.server && staffProfile?.active && supabaseClient){
+    target.innerHTML='<div class="history-loading">Carregando histórico…</div>';
+    const {data,error}=await supabaseClient
+      .from("activity_log")
+      .select("event_type,payload,actor_type,created_at")
+      .eq("work_order_id",order.id)
+      .order("created_at",{ascending:false})
+      .limit(30);
+    if(!error) rows=data||[];
+  }else{
+    rows=localOrderHistory()[String(order.id)]||[];
+    if(!rows.length){
+      rows=[
+        ...(order.quick?[]:[{event_type:"inspection_completed",payload:{inspection:true},actor_type:"user",created_at:new Date().toISOString()}]),
+        {event_type:order.quick?"work_order_quick_created":"work_order_created",payload:{},actor_type:"user",created_at:new Date().toISOString()}
+      ];
+    }
+  }
+
+  target.innerHTML=rows.length
+    ? rows.map(row=>{
+        const detail=historyDetail(row);
+        return '<article class="history-event">'+
+          '<i></i><div><b>'+escapeHtml(historyLabel(row.event_type))+'</b>'+
+          (detail?'<small>'+escapeHtml(detail)+'</small>':'')+
+          '<time>'+formatDecisionTime(row.created_at)+'</time></div>'+
+        '</article>';
+      }).join("")
+    : '<div class="history-empty">Ainda não há eventos registrados.</div>';
+}
+
 function getDemoApproval(){
   try{
     const record=JSON.parse(localStorage.getItem("oficina-approval-000123")||"null");
@@ -907,6 +983,8 @@ async function createOrder(fd,quick){
   };
   saved.unshift(order);
   localStorage.setItem("oficina-orders",JSON.stringify(saved));
+  appendLocalOrderHistory(order.id,quick?"work_order_quick_created":"work_order_created",{inspection:!quick});
+  if(!quick) appendLocalOrderHistory(order.id,"inspection_completed",{inspection:true});
   renderDashboard();renderOrders();
   toast(quick?"OS rápida criada. Complete veículo e vistoria depois.":"OS criada com vistoria inicial.");
   if(quick){resetWizard();openDetail(order.id)}
@@ -941,6 +1019,11 @@ function openDetail(id){
         '<div class="info-block"><span>Relato do cliente</span><b>'+escapeHtml(o.complaint||"Sem relato inicial")+'</b></div>'+
         '<div class="info-block"><span>Status atual</span><b>'+escapeHtml(o.stage)+'</b></div>'+
         '<div class="info-block"><span>Entrada</span><b>'+escapeHtml(o.opened)+'</b></div>'+
+        '<div class="operational-summary">'+
+          '<div><span>Prazo cliente</span><b>'+escapeHtml(o.promised||"A definir")+'</b></div>'+
+          '<div><span>Previsão atual</span><b>'+escapeHtml(o.forecast||"A definir")+'</b></div>'+
+        '</div>'+
+        (o.blockedReason?'<div class="info-block operational-alert"><span>Motivo / bloqueio</span><b>'+escapeHtml(o.blockedReason)+'</b></div>':'')+
         (o.quick?'<button class="btn primary full" id="completeEntry">Completar cadastro e vistoria</button>':'')+
       '</section>'+
       '<section class="tab-pane" data-pane="inspection">'+
@@ -948,9 +1031,10 @@ function openDetail(id){
         '<div class="photo-strip">'+(inspected?'<div class="photo-thumb">🚗</div><div class="photo-thumb">🚘</div><div class="photo-thumb">↔</div><div class="photo-thumb">↔</div><div class="photo-thumb">＋</div>':'<div class="muted">Sem evidências ainda.</div>')+'</div>'+
       '</section>'+
       '<section class="tab-pane" data-pane="estimate"><div class="info-block"><span>Orçamento</span><b>'+(o.status==="Em orçamento"?"Aguardando aprovação":"Disponível para consulta/edição")+'</b></div><div class="info-block"><span>Acesso rápido</span><b>Use o botão fixo abaixo para abrir o orçamento em qualquer aba.</b></div></section>'+
-      '<section class="tab-pane" data-pane="history"><div class="info-block"><span>Agora</span><b>OS criada</b></div>'+(inspected?'<div class="info-block"><span>Agora</span><b>Vistoria inicial concluída</b></div>':'')+'</section>'+
+      '<section class="tab-pane" data-pane="history"><div id="osHistoryList" class="os-history-list"><div class="history-loading">Carregando histórico…</div></div></section>'+
     '</div>'+
-    '<div class="os-global-actions">'+
+    '<div class="os-global-actions os-global-actions-v118">'+
+      '<button class="btn secondary full os-progress-shortcut" id="updateOsProgress"><span>↻</span>Atualizar andamento</button>'+
       '<button class="btn primary full os-budget-shortcut" data-go="budget"><span>R$</span>'+budgetActionLabel(o)+'</button>'+
     '</div>'+
   '</article>';
@@ -960,6 +1044,8 @@ function openDetail(id){
     queueScrollLock();
   }));
   detail.querySelectorAll("[data-go]").forEach(btn=>btn.onclick=()=>go(btn.dataset.go));
+  document.getElementById("updateOsProgress")?.addEventListener("click",()=>openOsQuickSheet(o.id));
+  loadOrderHistory(o);
   const complete=document.getElementById("completeEntry");
   if(complete)complete.onclick=()=>{
     document.getElementById("wizCustomer").value=o.customer;
@@ -1678,6 +1764,12 @@ async function saveOsQuickUpdate(){
     forecast:forecastValue?shortDateTime(new Date(forecastValue).toISOString()):order.forecast
   };
   saveKanbanOverride(order.id,patch);
+  appendLocalOrderHistory(order.id,"work_order_operational_updated",{
+    operational_state:osQuickSelectedState,
+    customer_promised_at:promisedValue?new Date(promisedValue).toISOString():null,
+    forecast_at:forecastValue?new Date(forecastValue).toISOString():null,
+    reason:needsReason?reason:null
+  });
   closeSheets();
   renderDashboard();
   renderOrders();
