@@ -80,15 +80,14 @@
     <section class="view" data-view="new-os">
       <div class="pagehead"><div><span class="muted">Recepção</span><h2>Abrir nova OS</h2></div></div>
       <form class="card form" id="newOsForm">
-        <label>Cliente<input name="customer" required placeholder="Nome do cliente"></label>
+        <label>Nome do cliente *<input name="customer" required autocomplete="name" placeholder="Nome do cliente"><small class="muted">Único dado obrigatório para abrir a OS rapidamente.</small></label>
         <div class="formgrid">
-          <label>Placa<input name="plate" required maxlength="8" placeholder="ABC1D23"></label>
+          <label>Placa<input name="plate" maxlength="8" placeholder="Pode completar depois"></label>
           <label>Quilometragem<input name="km" inputmode="numeric" placeholder="84500"></label>
         </div>
-        <label>Veículo<input name="vehicle" required placeholder="Ex.: Toyota Corolla 2.0"></label>
-        <label>Queixa / serviço solicitado<textarea name="complaint" rows="4" required placeholder="Descreva o que o cliente relatou"></textarea></label>
-        <div class="checkline"><input type="checkbox" id="entryInspection" checked><label for="entryInspection">Iniciar vistoria fotográfica após abrir</label></div>
-        <button class="btn primary full" type="submit">Abrir ordem de serviço</button>
+        <label>Veículo<input name="vehicle" placeholder="Pode completar depois"></label>
+        <label>Queixa / serviço solicitado<textarea name="complaint" rows="4" placeholder="Pode completar depois"></textarea></label>
+        <button class="btn primary full" type="submit">Abrir OS e ir para fotos</button>
       </form>
       <div class="hint">Nesta demo os dados ficam apenas neste navegador.</div>
     </section>
@@ -107,15 +106,15 @@
         <div class="vehicle-icon">🚗</div>
         <div><b>Toyota Corolla · ABC1D23</b><span>Cliente Exemplo · 84.512 km</span></div>
       </article>
-      <div class="section-title"><h3>Fotos obrigatórias</h3><span id="photoCount">0/6</span></div>
+      <div class="section-title"><h3>Fotos iniciais obrigatórias</h3><span id="photoCount">0/4</span></div>
       <div class="photo-grid" id="photos">
-        <button data-shot="Frente">＋<span>Frente</span></button>
-        <button data-shot="Traseira">＋<span>Traseira</span></button>
-        <button data-shot="Lateral E">＋<span>Lateral E</span></button>
-        <button data-shot="Lateral D">＋<span>Lateral D</span></button>
-        <button data-shot="Painel">＋<span>Painel</span></button>
-        <button data-shot="Interior">＋<span>Interior</span></button>
+        <button data-shot="Frente" data-required="1">＋<span>Frente *</span></button>
+        <button data-shot="Traseira" data-required="1">＋<span>Traseira *</span></button>
+        <button data-shot="Lateral E" data-required="1">＋<span>Lateral E *</span></button>
+        <button data-shot="Lateral D" data-required="1">＋<span>Lateral D *</span></button>
+        <button data-shot="Painel" data-required="0">＋<span>Painel (opcional)</span></button>
       </div>
+      <div class="hint">* As quatro vistas externas são obrigatórias para concluir a vistoria. A foto do painel é opcional.</div>
       <div class="section-title"><h3>Avarias na entrada</h3></div>
       <div class="card damage-map">
         <div class="carshape">🚘</div>
