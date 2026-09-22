@@ -128,6 +128,8 @@ const appBack=document.getElementById("appBack");
 let currentView="dashboard";
 let previousView="dashboard";
 let currentFilter="all";
+let currentKanbanStage="today";
+let currentKanbanHealth="";
 let wizardStep=1;
 let requiredPhotos=new Set();
 let deferredPrompt=null;
@@ -238,6 +240,7 @@ function mapServerOrder(row){
     complaint:row.complaint||"Sem relato inicial",
     health:serverHealth(row),
     promised:shortDateTime(row.customer_promised_at),
+    forecast:shortDateTime(row.forecast_at),
     owner:"Equipe",
     blockedReason:row.blocked_reason||"",
     raw:row
@@ -436,7 +439,7 @@ function bindOrderOpeners(){
   });
 }
 
-function kanbanGroup(o){
+function kanbanHealth(o){
   const state=(o.health||"").toLowerCase();
   if(state) return state;
   const text=(o.stage+" "+o.status).toLowerCase();
@@ -444,65 +447,155 @@ function kanbanGroup(o){
   if(/peça/.test(text)) return "waiting_parts";
   if(/aprovação|cliente/.test(text)) return "waiting_customer";
   if(/bloque/.test(text)) return "blocked";
-  if(/execução|serviço/.test(text)) return "on_track";
   return "on_track";
 }
 
-const kanbanColumns=[
-  {key:"overdue",label:"Atrasadas",icon:"●"},
-  {key:"attention",label:"Atenção",icon:"◐"},
-  {key:"waiting_parts",label:"Aguardando peça",icon:"▦"},
-  {key:"waiting_customer",label:"Aguardando cliente",icon:"◌"},
-  {key:"on_track",label:"Em andamento",icon:"▶"},
-  {key:"blocked",label:"Bloqueadas",icon:"Ⅱ"},
-  {key:"done",label:"Prontas",icon:"✓"}
+function kanbanStage(o){
+  const raw=o.raw||{};
+  const status=String(raw.status||"").toLowerCase();
+  const operational=String(raw.operational_state||"").toLowerCase();
+  const text=(o.stage+" "+o.status).toLowerCase();
+
+  if(status==="ready"||status==="delivered"||/pronta|retirada|entregue/.test(text)) return "ready";
+  if(operational==="waiting_parts"||/aguardando peça/.test(text)) return "waiting_parts";
+  if(status==="waiting_approval"||operational==="waiting_customer"||/aguardando cliente|aprovação/.test(text)) return "waiting_customer";
+  if(status==="approved"||status==="in_service"||/execução|liberado/.test(text)) return "service";
+  if(status==="budget"||/orçamento/.test(text)) return "budget";
+  return "entry";
+}
+
+const stageDefinitions=[
+  {key:"today",label:"Hoje",title:"Prioridades de hoje",subtitle:"O que pede ação primeiro"},
+  {key:"entry",label:"Entrada",title:"Entrada e diagnóstico",subtitle:"Veículos que ainda estão sendo avaliados"},
+  {key:"budget",label:"Orçamento",title:"Em orçamento",subtitle:"Montagem e revisão antes do envio"},
+  {key:"waiting_customer",label:"Cliente",title:"Aguardando cliente",subtitle:"Aprovação, retorno ou decisão"},
+  {key:"waiting_parts",label:"Peça",title:"Aguardando peça",subtitle:"Dependências de fornecedor e estoque"},
+  {key:"service",label:"Execução",title:"Em execução",subtitle:"Serviços liberados na oficina"},
+  {key:"ready",label:"Prontas",title:"Prontas para retirada",subtitle:"Serviço concluído"}
 ];
 
+function healthInfo(o){
+  const health=kanbanHealth(o);
+  const map={
+    overdue:{label:"Atrasada",cls:"danger",icon:"●"},
+    attention:{label:"Atenção",cls:"warning",icon:"●"},
+    waiting_parts:{label:"Aguardando peça",cls:"parts",icon:"●"},
+    waiting_customer:{label:"Aguardando cliente",cls:"customer",icon:"●"},
+    blocked:{label:"Bloqueada",cls:"blocked",icon:"Ⅱ"},
+    done:{label:"Pronta",cls:"ready",icon:"✓"},
+    on_track:{label:"No prazo",cls:"track",icon:"●"}
+  };
+  return map[health]||map.on_track;
+}
+
+function priorityRank(o){
+  const health=kanbanHealth(o);
+  return ({
+    overdue:0,
+    attention:1,
+    blocked:2,
+    waiting_parts:3,
+    waiting_customer:4,
+    on_track:5,
+    done:6
+  })[health]??7;
+}
+
 function kanbanCard(o){
-  const blocker=o.blockedReason?'<small class="kanban-blocker">'+escapeHtml(o.blockedReason)+'</small>':"";
-  return '<button class="kanban-card" data-open-os="'+o.id+'">'+
-    '<div class="kanban-card-top"><b>'+escapeHtml(o.plate)+'</b><span>'+escapeHtml(o.ref)+'</span></div>'+
-    '<strong>'+escapeHtml(o.vehicle)+'</strong>'+
-    '<small>'+escapeHtml(o.stage)+'</small>'+
-    '<div class="kanban-meta"><span>Prazo: '+escapeHtml(o.promised||"A definir")+'</span><span>'+escapeHtml(o.owner||"Sem responsável")+'</span></div>'+
-    blocker+
+  const health=healthInfo(o);
+  const forecast=o.forecast && o.forecast!=="A definir" && o.forecast!==o.promised
+    ? '<span><em>Previsão</em>'+escapeHtml(o.forecast)+'</span>'
+    : "";
+  const reason=o.blockedReason
+    ? '<div class="flow-reason">'+escapeHtml(o.blockedReason)+'</div>'
+    : "";
+  return '<button class="flow-card" data-open-os="'+o.id+'">'+
+    '<div class="flow-card-main">'+
+      '<div class="flow-card-title"><b>'+escapeHtml(o.plate)+'</b><span>'+escapeHtml(o.ref)+'</span></div>'+
+      '<strong>'+escapeHtml(o.vehicle)+'</strong>'+
+      '<small>'+escapeHtml(o.stage)+'</small>'+
+    '</div>'+
+    '<span class="health-badge '+health.cls+'"><i>'+health.icon+'</i>'+health.label+'</span>'+
+    '<div class="flow-times">'+
+      '<span><em>Prazo cliente</em>'+escapeHtml(o.promised||"A definir")+'</span>'+
+      forecast+
+      '<span class="flow-owner"><em>Responsável</em>'+escapeHtml(o.owner||"Sem responsável")+'</span>'+
+    '</div>'+
+    reason+
   '</button>';
+}
+
+function filteredKanbanOrders(orders){
+  let list=[...orders];
+  if(currentKanbanStage!=="today"){
+    list=list.filter(o=>kanbanStage(o)===currentKanbanStage);
+  }else{
+    list=list.filter(o=>kanbanStage(o)!=="ready" || kanbanHealth(o)==="done");
+    list.sort((a,b)=>priorityRank(a)-priorityRank(b));
+  }
+
+  if(currentKanbanHealth){
+    if(currentKanbanHealth==="blocked"){
+      list=list.filter(o=>["blocked","waiting_parts","waiting_customer"].includes(kanbanHealth(o)));
+    }else{
+      list=list.filter(o=>kanbanHealth(o)===currentKanbanHealth);
+    }
+  }
+  return list;
 }
 
 function renderKanban(orders){
   const board=document.getElementById("kanbanBoard");
   if(!board) return;
-  const groups=new Map(kanbanColumns.map(c=>[c.key,[]]));
-  orders.forEach(o=>{
-    const key=kanbanGroup(o);
-    if(!groups.has(key)) groups.set(key,[]);
-    groups.get(key).push(o);
-  });
-  board.innerHTML=kanbanColumns.map(col=>{
-    const list=groups.get(col.key)||[];
-    return '<section class="kanban-column" data-kanban-column="'+col.key+'">'+
-      '<header><span>'+col.icon+'</span><b>'+col.label+'</b><em>'+list.length+'</em></header>'+
-      '<div class="kanban-column-list">'+(list.length?list.map(kanbanCard).join(""):'<div class="kanban-empty">Sem OS</div>')+'</div>'+
-    '</section>';
-  }).join("");
 
-  const count=(...keys)=>orders.filter(o=>keys.includes(kanbanGroup(o))).length;
-  const overdue=document.getElementById("kanbanOverdueCount");
-  const attention=document.getElementById("kanbanAttentionCount");
-  const blocked=document.getElementById("kanbanBlockedCount");
-  const ready=document.getElementById("kanbanReadyCount");
-  if(overdue) overdue.textContent=count("overdue");
-  if(attention) attention.textContent=count("attention");
-  if(blocked) blocked.textContent=count("blocked","waiting_parts","waiting_customer");
-  if(ready) ready.textContent=count("done");
+  const count=(...keys)=>orders.filter(o=>keys.includes(kanbanHealth(o))).length;
+  document.getElementById("kanbanOverdueCount").textContent=count("overdue");
+  document.getElementById("kanbanAttentionCount").textContent=count("attention");
+  document.getElementById("kanbanBlockedCount").textContent=count("blocked","waiting_parts","waiting_customer");
+  document.getElementById("kanbanReadyCount").textContent=count("done");
+
+  const stage=stageDefinitions.find(x=>x.key===currentKanbanStage)||stageDefinitions[0];
+  const list=filteredKanbanOrders(orders);
+  const healthLabel=currentKanbanHealth
+    ? ({
+        overdue:" · somente atrasadas",
+        attention:" · somente atenção",
+        blocked:" · somente bloqueadas",
+        done:" · somente prontas"
+      })[currentKanbanHealth]||""
+    : "";
+
+  const title=document.getElementById("kanbanViewTitle");
+  const subtitle=document.getElementById("kanbanViewSubtitle");
+  const viewCount=document.getElementById("kanbanViewCount");
+  if(title) title.textContent=stage.title;
+  if(subtitle) subtitle.textContent=stage.subtitle+healthLabel;
+  if(viewCount) viewCount.textContent=list.length+" "+(list.length===1?"OS":"OS");
+
+  board.innerHTML=list.length
+    ? list.map(kanbanCard).join("")
+    : '<div class="flow-empty"><b>Nada por aqui</b><span>Nenhuma OS nesta combinação de etapa e alerta.</span></div>';
 
   board.querySelectorAll("[data-open-os]").forEach(btn=>btn.onclick=()=>openDetail(btn.dataset.openOs));
-  document.querySelectorAll("[data-kanban-target]").forEach(btn=>btn.onclick=()=>{
-    const target=btn.dataset.kanbanTarget;
-    const column=target==="blocked"
-      ? board.querySelector('[data-kanban-column="waiting_parts"]')
-      : board.querySelector('[data-kanban-column="'+target+'"]');
-    column?.scrollIntoView({behavior:"smooth",inline:"start",block:"nearest"});
+
+  document.querySelectorAll("[data-stage-filter]").forEach(btn=>{
+    btn.classList.toggle("active",btn.dataset.stageFilter===currentKanbanStage);
+    btn.onclick=()=>{
+      currentKanbanStage=btn.dataset.stageFilter;
+      currentKanbanHealth="";
+      renderKanban(allOrders());
+      queueScrollLock();
+    };
+  });
+
+  document.querySelectorAll("[data-health-filter]").forEach(btn=>{
+    const filter=btn.dataset.healthFilter;
+    btn.classList.toggle("active",filter===currentKanbanHealth);
+    btn.onclick=()=>{
+      currentKanbanHealth=currentKanbanHealth===filter?"":filter;
+      renderKanban(allOrders());
+      queueScrollLock();
+    };
   });
 }
 
@@ -516,15 +609,6 @@ function renderDashboard(){
   const serviceCount=document.getElementById("serviceCount");
   if(budgetCount) budgetCount.textContent=budgets.length;
   if(serviceCount) serviceCount.textContent=service.length;
-
-  const attention=[...budgets,...orders.filter(o=>/peça|pendente|retirada/i.test(o.stage))];
-  const unique=[...new Map(attention.map(o=>[o.id,o])).values()].slice(0,2);
-  const attentionEl=document.getElementById("attentionList");
-  if(attentionEl){
-    attentionEl.innerHTML=unique.length?unique.map(o=>
-      '<button class="attention-item" data-open-os="'+o.id+'"><span class="attention-dot"></span><div><b>'+escapeHtml(o.plate)+' · '+escapeHtml(o.vehicle)+'</b><small>'+escapeHtml(o.stage)+'</small></div><em>›</em></button>'
-    ).join(""):'<div class="attention-clear">✓ Nenhuma pendência crítica agora</div>';
-  }
 
   renderKanban(orders);
   const dashboardOrders=document.getElementById("dashboardOrders");
