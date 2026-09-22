@@ -1293,3 +1293,60 @@ body.no-scroll .os-global-actions{
   line-height:1.45;
 }
 .private-badge.ok{background:#123521;color:#64dca0}
+
+
+/* ===== v11.4 payments / Mercado Pago shell ===== */
+.payment-provider-card{margin-top:8px}
+.payment-sheet-card{max-height:88vh;overflow:auto}
+.payment-amount-card{
+  padding:12px;
+  margin-bottom:10px;
+  border:1px solid var(--line);
+  border-radius:14px;
+  background:linear-gradient(145deg,#11181c,#141a1e);
+}
+.payment-amount-card span,.payment-amount-card b,.payment-amount-card small{display:block}
+.payment-amount-card span{font-size:8px;color:var(--muted)}
+.payment-amount-card b{margin-top:3px;font-size:24px}
+.payment-amount-card small{margin-top:3px;font-size:8px;color:#89949b}
+.finance-form label em{font-style:normal;color:#768087;font-size:7.5px}
+.provider-status{
+  margin-top:9px;
+  padding:9px 10px;
+  border:1px solid #30373d;
+  border-radius:11px;
+  background:#101316;
+  color:#9da7ad;
+  font-size:8.5px;
+  line-height:1.4;
+}
+.pix-result{
+  margin-top:9px;
+  padding:10px;
+  border:1px solid #315341;
+  border-radius:13px;
+  background:#102019;
+}
+.pix-result img{
+  display:block;
+  width:160px;
+  max-width:60vw;
+  aspect-ratio:1;
+  object-fit:contain;
+  margin:0 auto 9px;
+  border-radius:10px;
+  background:#fff;
+  padding:5px;
+}
+.pix-result label{font-size:8px;color:#9bb6a6}
+.pix-result textarea{
+  width:100%;
+  margin:4px 0 7px;
+  padding:8px;
+  border:1px solid #355445;
+  border-radius:9px;
+  background:#0c1511;
+  color:#d9f0e2;
+  font-size:8px;
+  resize:none;
+}
