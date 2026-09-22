@@ -7,7 +7,7 @@
   <meta name="description" content="Auto Mecânica Confiança — gestão de oficina">
   <title>Auto Mecânica Confiança</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=9">
+  <link rel="stylesheet" href="./styles.css?v=10">
 </head>
 <body>
   <header class="appbar">
@@ -20,34 +20,26 @@
 
   <main id="app">
     <section class="view active" data-view="dashboard">
-      <div class="hero-banner"><span class="brand-banner-art" role="img" aria-label="Auto Mecânica Confiança"></span></div>
-      <div class="hero">
-        <span class="muted">Painel operacional</span>
-        <h1>Olá! 👋</h1>
-        <p>Vamos organizar a oficina de hoje.</p>
+      <div class="compact-greeting">
+        <div><span class="muted">Operação de hoje</span><h1>Olá 👋</h1></div>
+        <button class="icon-action" id="globalSearchBtn" aria-label="Busca rápida">⌕</button>
       </div>
 
-      <div class="dashboard-grid">
-        <button class="metric metric-primary" data-go="new-os"><span class="metric-icon">＋</span><b>Nova OS</b><small>Abertura rápida</small></button>
-        <button class="metric" data-go="orders"><span class="metric-icon">▤</span><strong id="openCount">8</strong><b>OS em aberto</b></button>
-        <button class="metric metric-warn" data-filter-jump="waiting"><span class="metric-icon">◷</span><strong>2</strong><b>Em orçamento</b></button>
-        <button class="metric" data-go="mechanic"><span class="metric-icon">🔧</span><strong>3</strong><b>Em execução</b></button>
+      <div class="compact-stats" aria-label="Resumo operacional">
+        <button class="stat-main" data-go="new-os"><span>＋</span><div><b>Nova OS</b><small>Abertura rápida</small></div></button>
+        <button class="stat-chip" data-go="orders"><strong id="openCount">5</strong><span>Abertas</span></button>
+        <button class="stat-chip warn" data-filter-jump="waiting"><strong id="budgetCount">2</strong><span>Orçamento</span></button>
+        <button class="stat-chip service" data-go="mechanic"><strong id="serviceCount">3</strong><span>Execução</span></button>
       </div>
 
-      <h2 class="section-label">Acesso rápido</h2>
-      <div class="quick-list">
-        <button data-go="clients"><span>👥</span><div><b>Clientes</b><small>Cadastro e histórico</small></div><em>›</em></button>
-        <button data-go="stock"><span>▦</span><div><b>Estoque</b><small>Peças, reservas e movimentações</small></div><em>›</em></button>
-        <button data-go="orders"><span>📋</span><div><b>Ordens de serviço</b><small>Acompanhar todas as etapas</small></div><em>›</em></button>
-        <button data-go="mechanic"><span>🔧</span><div><b>Área do mecânico</b><small>Execução sem valores financeiros</small></div><em>›</em></button>
-      </div>
+      <div class="section-head compact"><h2>Precisa de atenção</h2><button data-filter-jump="waiting">Ver fila</button></div>
+      <div class="attention-strip" id="attentionList"></div>
 
-      <div class="section-head"><h2>Em andamento</h2><button data-go="orders">Ver todas</button></div>
-      <div class="stack" id="dashboardOrders"></div>
+      <div class="section-head compact"><h2>Em andamento</h2><button data-go="orders">Todas</button></div>
+      <div class="compact-order-list" id="dashboardOrders"></div>
     </section>
 
     <section class="view" data-view="orders">
-      <div class="page-brand-chip"><span class="brand-banner-art" role="img" aria-label="Auto Mecânica Confiança"></span></div>
       <div class="page-title"><div><span>Operação</span><h1>Ordens de serviço</h1></div><button class="btn primary compact" data-go="new-os">＋ Nova</button></div>
       <label class="search"><span>⌕</span><input id="orderSearch" placeholder="Buscar placa, cliente ou OS"></label>
       <div class="chips">
@@ -60,14 +52,12 @@
     </section>
 
     <section class="view" data-view="clients">
-      <div class="page-brand-chip"><span class="brand-banner-art" role="img" aria-label="Auto Mecânica Confiança"></span></div>
       <div class="page-title"><div><span>Relacionamento</span><h1>Clientes</h1></div><button class="btn primary compact" id="newClientBtn">＋ Novo</button></div>
       <label class="search"><span>⌕</span><input id="clientSearch" placeholder="Buscar nome, telefone ou veículo"></label>
       <div class="stack" id="clientList"></div>
     </section>
 
     <section class="view" data-view="new-os">
-      <div class="page-brand-chip"><span class="brand-banner-art" role="img" aria-label="Auto Mecânica Confiança"></span></div>
       <div class="wizard-head">
         <span class="muted">Nova Ordem de Serviço</span>
         <h1 id="wizardTitle">Cliente</h1>
@@ -139,7 +129,6 @@
     </section>
 
     <section class="view" data-view="budget">
-      <div class="page-brand-chip"><span class="brand-banner-art" role="img" aria-label="Auto Mecânica Confiança"></span></div>
       <div class="page-title"><div><span>OF-0034</span><h1>Orçamento</h1></div><span class="status waiting">Aguardando aprovação</span></div>
       <div class="budget-sheet">
         <div class="budget-line"><div><b>Barra estabilizadora</b><small>Peça + M.O.</small></div><strong>R$ 320,00</strong></div>
@@ -177,7 +166,6 @@
     </section>
 
     <section class="view" data-view="mechanic">
-      <div class="page-brand-chip"><span class="brand-banner-art" role="img" aria-label="Auto Mecânica Confiança"></span></div>
       <div class="page-title"><div><span>Área técnica</span><h1>Minhas OS</h1></div><span class="status service">sem valores</span></div>
       <div class="mechanic-tabs"><button class="active">Minhas OS</button><button>Em andamento</button></div>
       <article class="mechanic-card">
@@ -197,7 +185,6 @@
     </section>
 
     <section class="view" data-view="stock">
-      <div class="page-brand-chip"><span class="brand-banner-art" role="img" aria-label="Auto Mecânica Confiança"></span></div>
       <div class="page-title"><div><span>Peças</span><h1>Estoque</h1></div><button class="btn primary compact">＋ Entrada</button></div>
       <label class="search"><span>⌕</span><input placeholder="Buscar produto"></label>
       <div class="stack">
@@ -211,8 +198,9 @@
   <nav class="bottomnav" aria-label="Navegação principal">
     <button class="active" data-go="dashboard"><span>⌂</span><b>Início</b></button>
     <button data-go="orders"><span>▤</span><b>OS</b></button>
+    <button class="nav-create" id="quickActionBtn" aria-label="Ações rápidas"><span>＋</span><b>Novo</b></button>
     <button data-go="clients"><span class="navicon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M16 11a4 4 0 1 0-3.2-6.4A4.8 4.8 0 0 1 13 10c.9.2 1.9.6 3 1Zm-8 0a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4 0-6 2-6 4.5V20h12v-2.5C14 15 12 13 8 13Zm8-.5c-.7 0-1.3.1-1.9.2 1.2 1.1 1.9 2.7 1.9 4.8V20h6v-2.2c0-3-2.2-5.3-6-5.3Z" fill="currentColor"/></svg></span><b>Clientes</b></button>
-    <button data-go="stock"><span>▦</span><b>Estoque</b></button>
+    <button id="moreNavBtn"><span>•••</span><b>Mais</b></button>
   </nav>
 
   <div class="modal" id="clientModal" hidden>
@@ -226,7 +214,39 @@
     </div>
   </div>
 
+<div class="sheet" id="quickActionSheet" hidden>
+    <button class="sheet-backdrop" data-close-sheet aria-label="Fechar"></button>
+    <div class="sheet-card">
+      <div class="sheet-handle"></div>
+      <h2>Ação rápida</h2>
+      <button class="sheet-action primary" data-sheet-go="new-os"><span>＋</span><div><b>Nova OS</b><small>Abertura rápida</small></div></button>
+      <button class="sheet-action" data-sheet-client><span>👤</span><div><b>Novo cliente</b><small>Cadastro rápido</small></div></button>
+      <button class="sheet-action" data-sheet-go="stock"><span>▦</span><div><b>Entrada de peça</b><small>Abrir estoque</small></div></button>
+    </div>
+  </div>
+
+  <div class="sheet" id="moreSheet" hidden>
+    <button class="sheet-backdrop" data-close-sheet aria-label="Fechar"></button>
+    <div class="sheet-card">
+      <div class="sheet-handle"></div>
+      <h2>Mais</h2>
+      <button class="sheet-action" data-sheet-go="mechanic"><span>🔧</span><div><b>Área do mecânico</b><small>Minhas OS e execução</small></div></button>
+      <button class="sheet-action" data-sheet-go="stock"><span>▦</span><div><b>Estoque</b><small>Peças e reservas</small></div></button>
+      <button class="sheet-action" data-sheet-go="client-approval"><span>✓</span><div><b>Aprovação demo</b><small>Visualizar página do cliente</small></div></button>
+    </div>
+  </div>
+
+  <div class="sheet" id="searchSheet" hidden>
+    <button class="sheet-backdrop" data-close-sheet aria-label="Fechar"></button>
+    <div class="sheet-card search-sheet-card">
+      <div class="sheet-handle"></div>
+      <h2>Busca rápida</h2>
+      <label class="search global-search"><span>⌕</span><input id="globalSearchInput" placeholder="Placa, cliente, OS ou veículo"></label>
+      <div class="compact-order-list" id="globalSearchResults"></div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
-  <script src="./app.js?v=9"></script>
+  <script src="./app.js?v=10"></script>
 </body>
 </html>
