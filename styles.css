@@ -62,3 +62,15 @@ body.public-mode .view{padding-top:max(22px,env(safe-area-inset-top));padding-bo
 .public-approval .floating-label{margin-top:4px}
 .public-approval .btn.big{margin-top:8px}
 @media(min-width:700px){.view{padding-bottom:120px}body.public-mode .view{padding-bottom:50px}}
+
+/* aprovação funcional demo v7 */
+.approval-note{margin:2px 2px 14px;color:var(--muted);font-size:11px;line-height:1.5}
+#approvalActions{display:grid;gap:9px}
+#approvalActions[hidden]{display:none!important}
+.decision-card{margin-top:14px;border-radius:15px;padding:16px;text-align:left;border:1px solid var(--line);display:grid;gap:5px}
+.decision-card b{font-size:16px}
+.decision-card span{font-size:11px;color:#d3d8dc}
+.decision-card small{font-size:10px;color:var(--muted);margin-top:4px}
+.decision-card.approved{background:#10281d;border-color:#245c40;color:#70e2a4}
+.decision-card.revision{background:#2b1817;border-color:#69332f;color:#ff8a82}
+.floating-label input:disabled{opacity:.82;color:#c8ced2;background:#13171a}
