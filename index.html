@@ -7,7 +7,7 @@
   <meta name="description" content="Auto Mecânica Confiança — gestão de oficina">
   <title>Auto Mecânica Confiança</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=10.5">
+  <link rel="stylesheet" href="./styles.css?v=11">
 </head>
 <body>
   <header class="appbar">
@@ -142,7 +142,7 @@
         <div class="budget-line"><div><b>Barra estabilizadora</b><small>Peça + M.O.</small></div><strong>R$ 320,00</strong></div>
         <div class="budget-line"><div><b>Terminal de direção</b><small>Peça + M.O.</small></div><strong>R$ 280,00</strong></div>
         <div class="budget-line"><div><b>Alinhamento e balanceamento</b><small>Serviço</small></div><strong>R$ 120,00</strong></div>
-        <div class="budget-total"><span>Total</span><strong>R$ 720,00</strong></div>
+        <div class="budget-total"><span>Total</span><strong id="approvalTotal">—</strong></div>
       </div>
       <button class="btn secondary full" id="addBudgetItem">＋ Adicionar item</button>
       <div class="send-card">
@@ -157,16 +157,14 @@
 
       <div class="approval-summary-compact">
         <div>
-          <small>ORÇAMENTO #000123 · REVISÃO 2</small>
-          <b>Chevrolet Onix 1.0 · ABC1D23</b>
+          <small id="approvalMeta">Carregando orçamento…</small>
+          <b id="approvalVehicle">—</b>
         </div>
         <strong>R$ 720,00</strong>
       </div>
 
-      <div class="approval-items compact-approval-items">
-        <div><span>Barra estabilizadora</span><b>R$ 320</b></div>
-        <div><span>Terminal de direção</span><b>R$ 280</b></div>
-        <div><span>Alinhamento e balanceamento</span><b>R$ 120</b></div>
+      <div class="approval-items compact-approval-items" id="approvalItems">
+        <div><span>Carregando itens…</span><b>—</b></div>
       </div>
 
       <div class="approval-sign-card">
@@ -277,6 +275,6 @@
   </div>
 
   <div class="toast" id="toast"></div>
-  <script src="./app.js?v=10.5"></script>
+  <script src="./app.js?v=11"></script>
 </body>
 </html>
