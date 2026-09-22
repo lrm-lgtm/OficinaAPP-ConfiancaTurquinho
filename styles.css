@@ -795,3 +795,162 @@ body.no-scroll .os-global-actions{
   height:72px;
   object-fit:contain;
 }
+
+
+/* ===== v10.5 compact signed approval ===== */
+.public-approval.approval-v105{
+  max-width:560px!important;
+  padding:10px 12px calc(94px + env(safe-area-inset-bottom))!important;
+}
+.compact-public-brand{
+  margin:0 0 8px!important;
+}
+.compact-public-brand .approval-logo-art{
+  min-height:46px;
+  max-height:58px!important;
+  border-radius:14px;
+  padding:5px 12px;
+}
+.approval-summary-compact{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:12px 13px;
+  border:1px solid var(--line);
+  border-radius:15px;
+  background:linear-gradient(145deg,#15191c,#111417);
+  box-shadow:0 8px 22px rgba(0,0,0,.22);
+}
+.approval-summary-compact small,
+.approval-summary-compact b{display:block}
+.approval-summary-compact small{
+  color:var(--muted);
+  font-size:8px;
+  letter-spacing:.5px;
+  margin-bottom:3px;
+}
+.approval-summary-compact b{
+  font-size:11px;
+}
+.approval-summary-compact strong{
+  white-space:nowrap;
+  font-size:24px;
+  letter-spacing:-.5px;
+}
+.compact-approval-items{
+  margin:7px 0!important;
+  padding:4px 12px!important;
+  border-radius:14px!important;
+}
+.compact-approval-items>div{
+  padding:7px 0!important;
+  font-size:10px!important;
+}
+.approval-sign-card{
+  border:1px solid var(--line);
+  border-radius:15px;
+  background:#121619;
+  padding:10px;
+}
+.compact-name{
+  margin:0 0 8px!important;
+}
+.compact-name input{
+  height:42px;
+  margin-top:4px!important;
+  padding:9px 11px!important;
+}
+.compact-signature{
+  margin:0 0 8px!important;
+  border-radius:13px!important;
+}
+.compact-signature .signature-head{
+  padding:8px 9px;
+}
+.compact-signature .signature-head b{
+  font-size:11px;
+}
+.compact-signature .signature-head small{
+  font-size:8px;
+}
+.signature-tools{
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+.signature-tools>span{
+  font-size:8px;
+  color:#a2a9af;
+  font-weight:900;
+}
+.signature-tools>span.ok{
+  color:#35c97a;
+}
+.compact-signature .signature-canvas{
+  height:108px!important;
+  border-top:1px solid #d6d3ca;
+}
+.compact-signature .signature-placeholder{
+  bottom:38px!important;
+  font-size:11px!important;
+}
+.compact-consent{
+  margin:0!important;
+  padding:8px 9px!important;
+  font-size:9px!important;
+  border-radius:11px!important;
+}
+.compact-consent input{
+  width:17px!important;
+  height:17px!important;
+}
+.approval-actionbar{
+  position:fixed;
+  left:0;
+  right:0;
+  bottom:0;
+  z-index:80;
+  max-width:560px;
+  margin:auto;
+  display:grid!important;
+  grid-template-columns:.85fr 1.5fr;
+  gap:7px;
+  padding:8px 12px calc(8px + env(safe-area-inset-bottom));
+  background:rgba(9,11,13,.96);
+  border-top:1px solid #252b30;
+  backdrop-filter:blur(14px);
+}
+.approval-actionbar .btn{
+  min-height:48px;
+  padding:10px;
+  font-size:11px;
+}
+.approval-actionbar .btn:disabled{
+  opacity:.38;
+  filter:saturate(.35);
+}
+.compact-decision{
+  display:grid!important;
+  grid-template-columns:1fr 120px;
+  align-items:center;
+  gap:8px;
+  margin:8px 0 0!important;
+  padding:10px!important;
+}
+.compact-decision>div:first-child b,
+.compact-decision>div:first-child span{display:block}
+.compact-decision>div:first-child b{font-size:13px}
+.compact-decision>div:first-child span{font-size:9px;color:#c9d1cc;margin-top:2px}
+.compact-decision .signature-receipt{
+  margin:0!important;
+  padding:4px!important;
+}
+.compact-decision .signature-receipt img{
+  height:48px!important;
+}
+.public-mode .approval-note{display:none!important}
+@media(max-width:430px){
+  .approval-summary-compact strong{font-size:21px}
+  .compact-decision{grid-template-columns:1fr 96px}
+}
