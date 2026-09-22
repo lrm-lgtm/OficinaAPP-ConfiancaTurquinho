@@ -100,9 +100,9 @@ document.getElementById("newOsForm").addEventListener("submit",e=>{
   const order={
     id,
     ref:"OF-D"+String(id).slice(-4),
-    plate:String(fd.get("plate")).toUpperCase(),
-    vehicle:String(fd.get("vehicle")),
-    customer:String(fd.get("customer")),
+    plate:String(fd.get("plate")||"").toUpperCase()||"SEM PLACA",
+    vehicle:String(fd.get("vehicle")||"").trim()||"Veículo a completar",
+    customer:String(fd.get("customer")).trim(),
     status:"Aberta",
     kind:"waiting",
     opened:"Agora",
@@ -114,21 +114,23 @@ document.getElementById("newOsForm").addEventListener("submit",e=>{
   renderDashboard();
   renderOrders();
   toast("OS criada nesta demo.");
-  go(document.getElementById("entryInspection").checked?"inspection":"orders");
+  go("inspection");
 });
 
-let photos=0;
+let requiredPhotos=0;
+let optionalPhotos=0;
 document.querySelectorAll("[data-shot]").forEach(btn=>btn.addEventListener("click",()=>{
   if(!btn.classList.contains("done")){
     btn.classList.add("done");
     btn.firstChild.textContent="✓";
-    photos++;
-    document.getElementById("photoCount").textContent=photos+"/6";
+    if(btn.dataset.required==="1") requiredPhotos++;
+    else optionalPhotos++;
+    document.getElementById("photoCount").textContent=requiredPhotos+"/4";
     toast("Foto "+btn.dataset.shot+" registrada na demo.");
   }
 }));
 document.getElementById("finishInspection").addEventListener("click",()=>{
-  if(photos<6){toast("Ainda faltam "+(6-photos)+" fotos obrigatórias.");return}
+  if(requiredPhotos<4){toast("Ainda faltam "+(4-requiredPhotos)+" fotos obrigatórias.");return}
   toast("Vistoria finalizada e congelada.");
   setTimeout(()=>go("detail"),650);
 });
