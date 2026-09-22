@@ -679,3 +679,35 @@ body.sheet-open.no-scroll{
 }
 .voice-status.active{color:#ff796b}
 @keyframes voicePulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.16);opacity:.72}}
+
+
+/* ===== v10.3 persistent OS budget shortcut ===== */
+.os-global-actions{
+  position:sticky;
+  bottom:76px;
+  z-index:9;
+  padding:9px 11px 11px;
+  border-top:1px solid var(--line);
+  background:linear-gradient(180deg,rgba(18,21,24,.72),#121518 28%);
+  backdrop-filter:blur(12px);
+}
+.os-budget-shortcut{
+  min-height:48px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+}
+.os-budget-shortcut>span{
+  display:grid;
+  place-items:center;
+  width:26px;
+  height:26px;
+  border-radius:9px;
+  background:rgba(255,255,255,.12);
+  font-size:11px;
+  font-weight:1000;
+}
+body.no-scroll .os-global-actions{
+  position:static;
+}
