@@ -7,7 +7,7 @@
   <meta name="description" content="Auto Mecânica Confiança — gestão de oficina">
   <title>Auto Mecânica Confiança</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=11.1">
+  <link rel="stylesheet" href="./styles.css?v=11.2">
 </head>
 <body>
   <header class="appbar">
@@ -229,12 +229,23 @@
     </section>
 
     <section class="view internal-only" data-view="finance">
-      <div class="page-title"><div><span>Interno</span><h1>Financeiro</h1></div><span class="status open">v11.2</span></div>
-      <div class="finance-placeholder">
-        <b>Custos, compras e recebimentos</b>
-        <p>Esta área é interna e nunca é enviada para o link público do cliente.</p>
-        <button class="btn primary full" type="button" id="financeReceiptShortcut">📷 Fotografar notinha</button>
+      <div class="page-title"><div><span>Somente interno</span><h1>Financeiro</h1></div><span class="status open">Privado</span></div>
+
+      <div class="finance-kpis">
+        <article><span>A receber</span><b>R$ 1.480</b><small>2 OS</small></article>
+        <article><span>A pagar</span><b>R$ 436</b><small>peças/fornec.</small></article>
+        <article><span>Resultado</span><b>R$ 1.044</b><small>estimado</small></article>
       </div>
+
+      <div class="finance-actions">
+        <button class="btn primary" type="button" id="financeReceiptShortcut">📷 Notinha</button>
+        <button class="btn secondary" type="button" id="financeExpenseShortcut">＋ Despesa</button>
+      </div>
+
+      <div class="privacy-chip">🔒 Custos, margem e notas nunca aparecem para o cliente.</div>
+
+      <div class="section-head compact"><h2>Movimentos recentes</h2><button type="button" id="financeFilterBtn">Todos</button></div>
+      <div class="finance-list" id="financeList"></div>
     </section>
   </main>
 
@@ -290,7 +301,51 @@
     </div>
   </div>
 
+  <div class="sheet" id="financeReceiptSheet" hidden>
+    <button class="sheet-backdrop" data-close-sheet aria-label="Fechar"></button>
+    <div class="sheet-card finance-sheet-card">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title-row"><div><small>Compra / despesa</small><h2>Registrar notinha</h2></div><span class="private-badge">interno</span></div>
+
+      <label class="receipt-drop" for="financeReceiptInput" id="receiptDrop">
+        <input id="financeReceiptInput" type="file" accept="image/*,application/pdf" capture="environment">
+        <div id="receiptPreview"><span>📷</span><b>Fotografar ou anexar</b><small>Imagem ou PDF da nota/comprovante</small></div>
+      </label>
+
+      <form id="financeReceiptForm" class="finance-form">
+        <div class="formgrid">
+          <label>Fornecedor<input name="supplier" placeholder="Ex.: Auto Peças Centro"></label>
+          <label>Data<input name="date" type="date"></label>
+        </div>
+        <div class="formgrid">
+          <label>Valor total<input name="total" inputmode="decimal" placeholder="0,00"></label>
+          <label>Vincular à OS<input name="order" placeholder="#000123"></label>
+        </div>
+        <label>Observação interna<textarea name="notes" rows="2" placeholder="Peças, condição de pagamento..."></textarea></label>
+        <div class="extraction-hint"><b>Leitura automática</b><span>Estrutura pronta; a extração por IA/OCR será ativada após definirmos o provedor.</span></div>
+        <button class="btn primary full" type="submit">Salvar rascunho da compra</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="sheet" id="financeExpenseSheet" hidden>
+    <button class="sheet-backdrop" data-close-sheet aria-label="Fechar"></button>
+    <div class="sheet-card finance-sheet-card">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title-row"><div><small>Financeiro interno</small><h2>Nova despesa</h2></div><span class="private-badge">interno</span></div>
+      <form id="financeExpenseForm" class="finance-form">
+        <label>Descrição<input name="description" required placeholder="Ex.: frete de peças"></label>
+        <div class="formgrid">
+          <label>Valor<input name="amount" required inputmode="decimal" placeholder="0,00"></label>
+          <label>Categoria<select name="category"><option>Peças</option><option>Frete</option><option>Terceiro</option><option>Despesa geral</option></select></label>
+        </div>
+        <label>Vincular à OS<input name="order" placeholder="#000123 (opcional)"></label>
+        <button class="btn primary full" type="submit">Registrar despesa</button>
+      </form>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
-  <script src="./app.js?v=11.1"></script>
+  <script src="./app.js?v=11.2"></script>
 </body>
 </html>
