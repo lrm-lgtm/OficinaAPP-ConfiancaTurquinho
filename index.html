@@ -7,7 +7,7 @@
   <meta name="description" content="Auto Mecânica Confiança — gestão de oficina">
   <title>Auto Mecânica Confiança</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=6">
+  <link rel="stylesheet" href="./styles.css?v=7">
 </head>
 <body>
   <header class="appbar">
@@ -167,8 +167,11 @@
         <div><span>Alinhamento e balanceamento</span><b>R$ 120,00</b></div>
       </div>
       <label class="floating-label">Seu nome<input id="approvalName" value="João da Silva"></label>
-      <button class="btn success full big" id="approveBudget">✓ Aprovar orçamento</button>
-      <button class="btn outline-danger full" id="rejectBudget">Solicitar revisão</button>
+      <p class="approval-note">Ao confirmar, você aprova a revisão atual do orçamento no valor de <b>R$ 720,00</b>. Qualquer alteração posterior exige nova aprovação.</p>
+      <div id="approvalActions">
+        <button class="btn success full big" id="approveBudget">✓ Aprovar orçamento</button>
+        <button class="btn outline-danger full" id="rejectBudget">Solicitar revisão</button>
+      </div>
       <div class="decision-result" id="decisionResult"></div>
     </section>
 
@@ -221,6 +224,6 @@
   </div>
 
   <div class="toast" id="toast"></div>
-  <script src="./app.js?v=6"></script>
+  <script src="./app.js?v=7"></script>
 </body>
 </html>
