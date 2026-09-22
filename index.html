@@ -7,7 +7,7 @@
   <meta name="description" content="Auto Mecânica Confiança — gestão de oficina">
   <title>Auto Mecânica Confiança</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=11">
+  <link rel="stylesheet" href="./styles.css?v=11.0.1">
 </head>
 <body>
   <header class="appbar">
@@ -142,7 +142,7 @@
         <div class="budget-line"><div><b>Barra estabilizadora</b><small>Peça + M.O.</small></div><strong>R$ 320,00</strong></div>
         <div class="budget-line"><div><b>Terminal de direção</b><small>Peça + M.O.</small></div><strong>R$ 280,00</strong></div>
         <div class="budget-line"><div><b>Alinhamento e balanceamento</b><small>Serviço</small></div><strong>R$ 120,00</strong></div>
-        <div class="budget-total"><span>Total</span><strong id="approvalTotal">—</strong></div>
+        <div class="budget-total"><span>Total</span><strong>R$ 720,00</strong></div>
       </div>
       <button class="btn secondary full" id="addBudgetItem">＋ Adicionar item</button>
       <div class="send-card">
@@ -160,7 +160,7 @@
           <small id="approvalMeta">Carregando orçamento…</small>
           <b id="approvalVehicle">—</b>
         </div>
-        <strong>R$ 720,00</strong>
+        <strong id="approvalTotal">—</strong>
       </div>
 
       <div class="approval-items compact-approval-items" id="approvalItems">
@@ -275,6 +275,6 @@
   </div>
 
   <div class="toast" id="toast"></div>
-  <script src="./app.js?v=11"></script>
+  <script src="./app.js?v=11.0.1"></script>
 </body>
 </html>
