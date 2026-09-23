@@ -2026,3 +2026,85 @@ body.sheet-open .internal-access-gate{
 .auth-message{
   min-height:48px;
 }
+
+
+/* ===== v12.5 approval invoice + payment condition ===== */
+.invoice-payment-mode{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:3px;
+  padding:10px 11px;
+  margin:7px 0;
+  border:1px solid #343b40;
+  border-radius:13px;
+  background:#13181b;
+}
+.invoice-payment-mode span,.invoice-payment-mode b{display:block}
+.invoice-payment-mode span{color:#818b92;font-size:7px;text-transform:uppercase;letter-spacing:.4px}
+.invoice-payment-mode b{margin-top:2px;font-size:11px}
+.invoice-payment-mode small{color:#a1abb1;font-size:8px;line-height:1.35}
+.public-payment-panel{
+  margin:8px 0 82px;
+  padding:11px;
+  border:1px solid #2e6447;
+  border-radius:14px;
+  background:#102218;
+}
+.public-payment-panel[hidden]{display:none!important}
+.public-payment-panel.credit{
+  border-color:#5b4c25;
+  background:#211c10;
+}
+.public-payment-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:10px;
+}
+.public-payment-head span,.public-payment-head b{display:block}
+.public-payment-head span{color:#7f9f8b;font-size:7px;text-transform:uppercase}
+.public-payment-head b{margin-top:2px;font-size:12px}
+.public-payment-head strong{font-size:18px}
+.public-payment-panel p{margin:8px 0;color:#acb9b0;font-size:8.5px;line-height:1.4}
+.public-payment-status{
+  padding:8px 9px;
+  border-radius:9px;
+  background:rgba(255,255,255,.045);
+  color:#b9c7be;
+  font-size:8px;
+}
+.budget-send-sheet-card{max-height:86vh;overflow:auto}
+.send-mode-options{
+  display:grid;
+  gap:7px;
+  margin-bottom:9px;
+}
+.send-mode-option{
+  display:grid;
+  grid-template-columns:28px 1fr;
+  gap:9px;
+  align-items:center;
+  padding:10px;
+  border:1px solid #30373d;
+  border-radius:12px;
+  background:#14181b;
+}
+.send-mode-option input{display:none}
+.send-mode-option.active{
+  border-color:#e74839;
+  background:#211615;
+  box-shadow:inset 0 0 0 1px rgba(231,72,57,.15);
+}
+.send-mode-icon{
+  display:grid;
+  place-items:center;
+  width:28px;
+  height:28px;
+  border-radius:9px;
+  background:#242a2e;
+  font-size:14px;
+}
+.send-mode-option b,.send-mode-option small{display:block}
+.send-mode-option b{font-size:10px}
+.send-mode-option small{margin-top:2px;color:#8f999f;font-size:8px;line-height:1.35}
+.send-due-field[hidden]{display:none!important}
