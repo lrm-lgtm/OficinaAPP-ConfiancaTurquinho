@@ -217,6 +217,7 @@ function toast(message){
 
 function go(name){
   const publicMode=name==="client-approval";
+  if(name!=="detail" && document.body.classList.contains("desktop-drawer-open") && name!==currentView) closeDesktopOsDrawer();
   if(REAL_MODE && !publicMode && !staffProfile?.active){
     syncInternalAccessGate();
     return;
@@ -529,88 +530,13 @@ function historyDetail(row){
   return p.inspection?"Vistoria de entrada registrada.":"";
 }
 async function loadOrderHistory(order){
-  const target=document.getElementById("osHistoryList");
-  if(!target) return;
-
-  let rows=[];
-  if(order.server && staffProfile?.active && supabaseClient){
-    target.innerHTML='<div class="history-loading">Carregando histórico…</div>';
-    const {data,error}=await supabaseClient
-      .from("activity_log")
-      .select("event_type,payload,actor_type,created_at")
-      .eq("work_order_id",order.id)
-      .order("created_at",{ascending:false})
-      .limit(30);
-    if(!error) rows=data||[];
-  }else{
-    rows=localOrderHistory()[String(order.id)]||[];
-    if(!rows.length){
-      rows=[
-        ...(order.quick?[]:[{event_type:"inspection_completed",payload:{inspection:true},actor_type:"user",created_at:new Date().toISOString()}]),
-        {event_type:order.quick?"work_order_quick_created":"work_order_created",payload:{},actor_type:"user",created_at:new Date().toISOString()}
-      ];
-    }
-  }
-
-  target.innerHTML=rows.length
-    ? rows.map(row=>{
-        const detail=historyDetail(row);
-        return '<article class="history-event">'+
-          '<i></i><div><b>'+escapeHtml(historyLabel(row.event_type))+'</b>'+
-          (detail?'<small>'+escapeHtml(detail)+'</small>':'')+
-          '<time>'+formatDecisionTime(row.created_at)+'</time></div>'+
-        '</article>';
-      }).join("")
-    : '<div class="history-empty">Ainda não há eventos registrados.</div>';
+  const target=document.querySelector(".view[data-view='detail'].active .os-history-list")||document.querySelector("#desktopOsDrawerContent .os-history-list");
+  return loadOrderHistoryInto(order,target);
 }
 
 async function loadInspectionPhotos(order){
-  const target=document.getElementById("osInspectionContent");
-  if(!target) return;
-
-  if(!(order.server && staffProfile?.active && supabaseClient)){
-    const inspected=!order.quick;
-    target.innerHTML=inspected
-      ? '<div class="info-block"><span>Vistoria de entrada</span><b>4 fotos obrigatórias registradas</b></div><div class="photo-strip"><div class="photo-thumb">🚗</div><div class="photo-thumb">🚘</div><div class="photo-thumb">↔</div><div class="photo-thumb">↔</div><div class="photo-thumb">＋</div></div>'
-      : '<div class="info-block"><span>Vistoria de entrada</span><b>Pendente</b></div><div class="muted">Sem evidências ainda.</div>';
-    return;
-  }
-
-  target.innerHTML='<div class="inspection-loading">Carregando evidências…</div>';
-  const {data:photos,error}=await supabaseClient
-    .from("inspection_photos")
-    .select("id,slot,phase,storage_path,required,created_at")
-    .eq("work_order_id",order.id)
-    .eq("phase","entry")
-    .order("created_at",{ascending:true});
-  if(error){
-    target.innerHTML='<div class="inspection-loading">Não foi possível carregar as fotos.</div>';
-    return;
-  }
-
-  const rows=[];
-  for(const photo of (photos||[])){
-    const {data:signed}=await supabaseClient.storage.from("oficina-evidence").createSignedUrl(photo.storage_path,600);
-    rows.push({...photo,url:signed?.signedUrl||""});
-  }
-
-  const requiredCount=rows.filter(x=>x.required).length;
-  const slotLabel={front:"Frente",rear:"Traseira",left:"Lateral esquerda",right:"Lateral direita",panel:"Painel / km",other:"Outro"};
-  target.innerHTML=
-    '<div class="info-block"><span>Vistoria de entrada</span><b>'+requiredCount+' de 4 obrigatórias registradas</b></div>'+
-    (rows.length
-      ? '<div class="evidence-grid">'+rows.map(photo=>
-          '<button class="evidence-photo" type="button" data-evidence-url="'+escapeHtml(photo.url)+'">'+
-            (photo.url?'<img src="'+escapeHtml(photo.url)+'" alt="'+escapeHtml(slotLabel[photo.slot]||photo.slot)+'">':'<div class="evidence-missing">Sem prévia</div>')+
-            '<span>'+escapeHtml(slotLabel[photo.slot]||photo.slot)+'</span>'+
-          '</button>'
-        ).join("")+'</div>'
-      : '<div class="inspection-loading">Nenhuma foto registrada nesta OS.</div>');
-
-  target.querySelectorAll("[data-evidence-url]").forEach(btn=>btn.addEventListener("click",()=>{
-    const url=btn.dataset.evidenceUrl;
-    if(url) window.open(url,"_blank","noopener");
-  }));
+  const target=document.querySelector(".view[data-view='detail'].active .os-inspection-content")||document.querySelector("#desktopOsDrawerContent .os-inspection-content");
+  return loadInspectionPhotosInto(order,target);
 }
 
 
@@ -1343,13 +1269,23 @@ function budgetActionLabel(o){
   return "Ir para orçamento";
 }
 
-function openDetail(id){
-  const o=allOrders().find(x=>String(x.id)===String(id))||(DEMO_MODE?demoOrders[0]:null);
-  if(!o){toast("OS não encontrada no servidor.");return}
+let desktopDrawerOrderId=null;
+
+function closeDesktopOsDrawer(){
+  const drawer=document.getElementById("desktopOsDrawer");
+  const content=document.getElementById("desktopOsDrawerContent");
+  if(drawer) drawer.hidden=true;
+  if(content) content.innerHTML="";
+  desktopDrawerOrderId=null;
+  document.body.classList.remove("desktop-drawer-open");
+}
+function shouldUseDesktopDrawer(){
+  return isDesktopUI() && ["dashboard","orders","mechanic","stock","finance"].includes(currentView);
+}
+function renderOrderDetailInto(detail,o,useDrawer=false){
   const inspected=!o.quick;
-  const detail=document.getElementById("osDetail");
   detail.innerHTML=
-  '<article class="os-hero">'+
+  '<article class="os-hero '+(useDrawer?'os-hero-drawer':'')+'">'+
     '<div class="os-cover"><div class="car-emoji">🚗</div><div class="os-cover-info"><span>'+o.ref+'</span><h1>'+escapeHtml(o.vehicle)+'</h1><span>'+escapeHtml(o.plate)+' · '+escapeHtml(o.customer)+'</span>'+statusBadge(o.status)+'</div></div>'+
     '<div class="os-tabs"><button class="active" data-os-tab="summary">Resumo</button><button data-os-tab="inspection">Vistoria</button><button data-os-tab="estimate">Orçamento</button><button data-os-tab="history">Histórico</button></div>'+
     '<div class="tab-content">'+
@@ -1362,38 +1298,161 @@ function openDetail(id){
           '<div><span>Previsão atual</span><b>'+escapeHtml(o.forecast||"A definir")+'</b></div>'+
         '</div>'+
         (o.blockedReason?'<div class="info-block operational-alert"><span>Motivo / bloqueio</span><b>'+escapeHtml(o.blockedReason)+'</b></div>':'')+
-        (o.quick?'<button class="btn primary full" id="completeEntry">Completar cadastro e vistoria</button>':'')+
+        (o.quick?'<button class="btn primary full" data-complete-entry>Completar cadastro e vistoria</button>':'')+
       '</section>'+
-      '<section class="tab-pane" data-pane="inspection"><div id="osInspectionContent"><div class="inspection-loading">Carregando evidências…</div></div></section>'+
-      '<section class="tab-pane" data-pane="estimate"><div class="info-block"><span>Orçamento</span><b>'+(o.status==="Em orçamento"?"Aguardando aprovação":"Disponível para consulta/edição")+'</b></div><div class="info-block"><span>Acesso rápido</span><b>Use o botão fixo abaixo para abrir o orçamento em qualquer aba.</b></div></section>'+
-      '<section class="tab-pane" data-pane="history"><div id="osHistoryList" class="os-history-list"><div class="history-loading">Carregando histórico…</div></div></section>'+
+      '<section class="tab-pane" data-pane="inspection"><div class="os-inspection-content"><div class="inspection-loading">Carregando evidências…</div></div></section>'+
+      '<section class="tab-pane" data-pane="estimate"><div class="info-block"><span>Orçamento</span><b>'+(o.status==="Em orçamento"?"Aguardando aprovação":"Disponível para consulta/edição")+'</b></div><div class="info-block"><span>Acesso rápido</span><b>Abra o orçamento sem perder o contexto desta OS.</b></div></section>'+
+      '<section class="tab-pane" data-pane="history"><div class="os-history-list"><div class="history-loading">Carregando histórico…</div></div></section>'+
     '</div>'+
     '<div class="os-global-actions os-global-actions-v118">'+
-      '<button class="btn secondary full os-progress-shortcut" id="updateOsProgress"><span>↻</span>Atualizar andamento</button>'+
-      '<button class="btn primary full os-budget-shortcut" data-go="budget"><span>R$</span>'+budgetActionLabel(o)+'</button>'+
+      '<button class="btn secondary full os-progress-shortcut" data-update-progress><span>↻</span>Atualizar andamento</button>'+
+      '<button class="btn primary full os-budget-shortcut" data-open-budget><span>R$</span>'+budgetActionLabel(o)+'</button>'+
     '</div>'+
   '</article>';
+
   detail.querySelectorAll("[data-os-tab]").forEach(btn=>btn.addEventListener("click",()=>{
     detail.querySelectorAll("[data-os-tab]").forEach(x=>x.classList.toggle("active",x===btn));
     detail.querySelectorAll(".tab-pane").forEach(p=>p.classList.toggle("active",p.dataset.pane===btn.dataset.osTab));
     queueScrollLock();
   }));
-  detail.querySelectorAll("[data-go]").forEach(btn=>btn.onclick=()=>{
-    if(btn.dataset.go==="budget") selectedBudgetOrderId=o.id;
-    go(btn.dataset.go);
+
+  detail.querySelector("[data-update-progress]")?.addEventListener("click",()=>openOsQuickSheet(o.id));
+  detail.querySelector("[data-open-budget]")?.addEventListener("click",()=>{
+    selectedBudgetOrderId=o.id;
+    if(useDrawer) closeDesktopOsDrawer();
+    go("budget");
   });
-  document.getElementById("updateOsProgress")?.addEventListener("click",()=>openOsQuickSheet(o.id));
-  loadOrderHistory(o);
-  loadInspectionPhotos(o);
-  const complete=document.getElementById("completeEntry");
-  if(complete)complete.onclick=()=>{
+
+  detail.querySelector("[data-complete-entry]")?.addEventListener("click",()=>{
     document.getElementById("wizCustomer").value=o.customer;
-    const plate=wizard.elements.plate; const vehicle=wizard.elements.vehicle; const complaint=wizard.elements.complaint;
-    plate.value=o.plate==="SEM PLACA"?"":o.plate;vehicle.value=o.vehicle==="Veículo a completar"?"":o.vehicle;complaint.value=o.complaint==="Sem relato inicial"?"":o.complaint;
-    go("new-os");setWizardStep(2);
-  };
+    const plate=wizard.elements.plate;
+    const vehicle=wizard.elements.vehicle;
+    const complaint=wizard.elements.complaint;
+    plate.value=o.plate==="SEM PLACA"?"":o.plate;
+    vehicle.value=o.vehicle==="Veículo a completar"?"":o.vehicle;
+    complaint.value=o.complaint==="Sem relato inicial"?"":o.complaint;
+    if(useDrawer) closeDesktopOsDrawer();
+    go("new-os");
+    setWizardStep(2);
+  });
+
+  loadOrderHistoryInto(o,detail.querySelector(".os-history-list"));
+  loadInspectionPhotosInto(o,detail.querySelector(".os-inspection-content"));
+}
+
+async function loadOrderHistoryInto(order,target){
+  if(!target) return;
+  let rows=[];
+  if(order.server && staffProfile?.active && supabaseClient){
+    target.innerHTML='<div class="history-loading">Carregando histórico…</div>';
+    const {data,error}=await supabaseClient
+      .from("activity_log")
+      .select("event_type,payload,actor_type,created_at")
+      .eq("work_order_id",order.id)
+      .order("created_at",{ascending:false})
+      .limit(30);
+    if(!error) rows=data||[];
+  }else{
+    rows=localOrderHistory()[String(order.id)]||[];
+    if(!rows.length){
+      rows=[
+        ...(order.quick?[]:[{event_type:"inspection_completed",payload:{inspection:true},actor_type:"user",created_at:new Date().toISOString()}]),
+        {event_type:order.quick?"work_order_quick_created":"work_order_created",payload:{},actor_type:"user",created_at:new Date().toISOString()}
+      ];
+    }
+  }
+  target.innerHTML=rows.length
+    ? rows.map(row=>{
+        const detail=historyDetail(row);
+        return '<article class="history-event"><i></i><div><b>'+escapeHtml(historyLabel(row.event_type))+'</b>'+
+          (detail?'<small>'+escapeHtml(detail)+'</small>':'')+
+          '<time>'+formatDecisionTime(row.created_at)+'</time></div></article>';
+      }).join("")
+    : '<div class="history-empty">Ainda não há eventos registrados.</div>';
+}
+
+async function loadInspectionPhotosInto(order,target){
+  if(!target) return;
+  if(!(order.server && staffProfile?.active && supabaseClient)){
+    const inspected=!order.quick;
+    target.innerHTML=inspected
+      ? '<div class="info-block"><span>Vistoria de entrada</span><b>4 fotos obrigatórias registradas</b></div><div class="photo-strip"><div class="photo-thumb">🚗</div><div class="photo-thumb">🚘</div><div class="photo-thumb">↔</div><div class="photo-thumb">↔</div><div class="photo-thumb">＋</div></div>'
+      : '<div class="info-block"><span>Vistoria de entrada</span><b>Pendente</b></div><div class="muted">Sem evidências ainda.</div>';
+    return;
+  }
+
+  target.innerHTML='<div class="inspection-loading">Carregando evidências…</div>';
+  const {data:photos,error}=await supabaseClient
+    .from("inspection_photos")
+    .select("id,slot,phase,storage_path,required,created_at")
+    .eq("work_order_id",order.id)
+    .eq("phase","entry")
+    .order("created_at",{ascending:true});
+  if(error){
+    target.innerHTML='<div class="inspection-loading">Não foi possível carregar as fotos.</div>';
+    return;
+  }
+
+  const rows=[];
+  for(const photo of (photos||[])){
+    const {data:signed}=await supabaseClient.storage.from("oficina-evidence").createSignedUrl(photo.storage_path,600);
+    rows.push({...photo,url:signed?.signedUrl||""});
+  }
+
+  const requiredCount=rows.filter(x=>x.required).length;
+  const slotLabel={front:"Frente",rear:"Traseira",left:"Lateral esquerda",right:"Lateral direita",panel:"Painel / km",other:"Outro"};
+  target.innerHTML=
+    '<div class="info-block"><span>Vistoria de entrada</span><b>'+requiredCount+' de 4 obrigatórias registradas</b></div>'+
+    (rows.length
+      ? '<div class="evidence-grid">'+rows.map(photo=>
+          '<button class="evidence-photo" type="button" data-evidence-url="'+escapeHtml(photo.url)+'">'+
+            (photo.url?'<img src="'+escapeHtml(photo.url)+'" alt="'+escapeHtml(slotLabel[photo.slot]||photo.slot)+'">':'<div class="evidence-missing">Sem prévia</div>')+
+            '<span>'+escapeHtml(slotLabel[photo.slot]||photo.slot)+'</span>'+
+          '</button>'
+        ).join("")+'</div>'
+      : '<div class="inspection-loading">Nenhuma foto registrada nesta OS.</div>');
+
+  target.querySelectorAll("[data-evidence-url]").forEach(btn=>btn.addEventListener("click",()=>{
+    const url=btn.dataset.evidenceUrl;
+    if(url) window.open(url,"_blank","noopener");
+  }));
+}
+
+function openDetail(id,forcePage=false){
+  const o=allOrders().find(x=>String(x.id)===String(id))||(DEMO_MODE?demoOrders[0]:null);
+  if(!o){toast("OS não encontrada no servidor.");return}
+
+  const useDrawer=!forcePage && shouldUseDesktopDrawer();
+  const pageDetail=document.getElementById("osDetail");
+  const drawer=document.getElementById("desktopOsDrawer");
+  const drawerContent=document.getElementById("desktopOsDrawerContent");
+
+  if(useDrawer){
+    pageDetail.innerHTML="";
+    desktopDrawerOrderId=o.id;
+    document.getElementById("desktopOsDrawerTitle").textContent=o.ref+" · "+o.plate;
+    renderOrderDetailInto(drawerContent,o,true);
+    drawer.hidden=false;
+    document.body.classList.add("desktop-drawer-open");
+    return;
+  }
+
+  closeDesktopOsDrawer();
+  renderOrderDetailInto(pageDetail,o,false);
   go("detail");
 }
+
+document.getElementById("desktopOsDrawerClose")?.addEventListener("click",closeDesktopOsDrawer);
+document.getElementById("desktopOsDrawerBackdrop")?.addEventListener("click",closeDesktopOsDrawer);
+document.getElementById("desktopOsDrawerExpand")?.addEventListener("click",()=>{
+  if(!desktopDrawerOrderId) return;
+  const id=desktopDrawerOrderId;
+  closeDesktopOsDrawer();
+  openDetail(id,true);
+});
+document.addEventListener("keydown",event=>{
+  if(event.key==="Escape" && document.body.classList.contains("desktop-drawer-open")) closeDesktopOsDrawer();
+});
 
 // ---- v12.0 functional budget revisions ----
 const budgetItemSheet=document.getElementById("budgetItemSheet");
@@ -2984,6 +3043,7 @@ async function saveOsQuickUpdate(){
       await syncServerData({quiet:true});
       closeSheets();
       renderDashboard();
+      if(document.body.classList.contains("desktop-drawer-open")) openDetail(order.id);
       toast("Andamento atualizado no servidor.");
     }catch(error){
       toast("Não foi possível atualizar a OS.");
@@ -3033,6 +3093,7 @@ async function saveOsQuickUpdate(){
   closeSheets();
   renderDashboard();
   renderOrders();
+  if(document.body.classList.contains("desktop-drawer-open")) openDetail(order.id);
   toast("Andamento atualizado nesta demonstração.");
 }
 
