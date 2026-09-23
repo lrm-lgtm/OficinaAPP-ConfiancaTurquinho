@@ -7,7 +7,7 @@
   <meta name="description" content="Auto Mecânica Confiança — gestão de oficina">
   <title>Auto Mecânica Confiança</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=13.2">
+  <link rel="stylesheet" href="./styles.css?v=13.3">
 </head>
 <body>
   <header class="appbar">
@@ -334,6 +334,20 @@
     </section>
   </main>
 
+  <div class="desktop-os-drawer" id="desktopOsDrawer" hidden>
+    <button class="desktop-os-drawer-backdrop" id="desktopOsDrawerBackdrop" aria-label="Fechar OS"></button>
+    <aside class="desktop-os-drawer-panel" aria-label="Detalhes da ordem de serviço">
+      <header class="desktop-os-drawer-head">
+        <div><small>ORDEM DE SERVIÇO</small><b id="desktopOsDrawerTitle">Detalhes</b></div>
+        <div>
+          <button type="button" id="desktopOsDrawerExpand" title="Abrir em página completa">↗</button>
+          <button type="button" id="desktopOsDrawerClose" title="Fechar">×</button>
+        </div>
+      </header>
+      <div class="desktop-os-drawer-content" id="desktopOsDrawerContent"></div>
+    </aside>
+  </div>
+
   <nav class="bottomnav" aria-label="Navegação principal">
     <button class="active" data-go="dashboard"><span>⌂</span><b>Início</b></button>
     <button data-go="orders"><span>▤</span><b>OS</b></button>
@@ -603,6 +617,6 @@
 
   <div class="toast" id="toast"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./app.js?v=13.2"></script>
+  <script src="./app.js?v=13.3"></script>
 </body>
 </html>
