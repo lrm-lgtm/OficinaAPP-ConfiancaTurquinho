@@ -7,7 +7,7 @@
   <meta name="description" content="Auto Mecânica Confiança — gestão de oficina">
   <title>Auto Mecânica Confiança</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=12.5.1">
+  <link rel="stylesheet" href="./styles.css?v=12.6">
 </head>
 <body>
   <header class="appbar">
@@ -398,22 +398,46 @@
 
   <div class="sheet" id="budgetItemSheet" hidden>
     <button class="sheet-backdrop" data-close-sheet aria-label="Fechar"></button>
-    <div class="sheet-card budget-item-sheet-card">
+    <div class="sheet-card budget-item-sheet-card budget-composer-card">
       <div class="sheet-handle"></div>
       <div class="sheet-title-row">
-        <div><small id="budgetItemSheetMeta">Orçamento</small><h2>Adicionar item</h2></div>
+        <div><small id="budgetItemSheetMeta">Orçamento</small><h2>Adicionar ao orçamento</h2></div>
         <span class="private-badge">interno</span>
       </div>
-      <form id="budgetItemForm" class="finance-form">
-        <label>Descrição<input name="description" required placeholder="Ex.: Terminal de direção"></label>
-        <div class="formgrid">
-          <label>Tipo<select name="kind"><option value="part">Peça</option><option value="service">Serviço</option><option value="other">Outro</option></select></label>
-          <label>Quantidade<input name="quantity" inputmode="decimal" value="1"></label>
-        </div>
-        <label>Valor unitário<input name="unit_price" inputmode="decimal" required placeholder="0,00"></label>
-        <div class="budget-item-preview" id="budgetItemPreview">Total do item: R$ 0,00</div>
-        <button class="btn primary full" type="submit" id="saveBudgetItem">Adicionar ao orçamento</button>
-      </form>
+
+      <div class="budget-composer-summary" id="budgetComposerSummary">0 itens · R$ 0,00</div>
+
+      <label class="search budget-catalog-search">
+        <span>⌕</span>
+        <input id="budgetCatalogSearch" autocomplete="off" placeholder="Buscar peça ou serviço">
+      </label>
+
+      <div class="budget-catalog-tabs" id="budgetCatalogTabs">
+        <button type="button" class="active" data-catalog-filter="all">Todos</button>
+        <button type="button" data-catalog-filter="part">Peças</button>
+        <button type="button" data-catalog-filter="service">Serviços</button>
+      </div>
+
+      <div class="budget-catalog-results" id="budgetCatalogResults">
+        <div class="catalog-empty">Carregando itens usados pela oficina…</div>
+      </div>
+
+      <details class="budget-manual-entry" id="budgetManualEntry">
+        <summary>＋ Item que não está no catálogo</summary>
+        <form id="budgetItemForm" class="finance-form budget-manual-form">
+          <label>Descrição<input name="description" required placeholder="Ex.: Terminal de direção"></label>
+          <div class="formgrid">
+            <label>Tipo<select name="kind"><option value="part">Peça</option><option value="service">Serviço</option><option value="other">Outro</option></select></label>
+            <label>Quantidade<input name="quantity" inputmode="decimal" value="1"></label>
+          </div>
+          <label>Valor unitário<input name="unit_price" inputmode="decimal" required placeholder="0,00"></label>
+          <label class="catalog-save-option"><input type="checkbox" name="save_catalog" checked><span>Salvar para usar de novo nos próximos orçamentos</span></label>
+          <div class="budget-item-preview" id="budgetItemPreview">Total do item: R$ 0,00</div>
+          <button class="btn secondary full" type="submit" id="saveBudgetItem">Adicionar este item</button>
+        </form>
+      </details>
+
+      <button class="btn primary full budget-composer-done" type="button" id="budgetComposerDone">Concluir</button>
     </div>
   </div>
 
@@ -557,6 +581,6 @@
 
   <div class="toast" id="toast"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./app.js?v=12.5.1"></script>
+  <script src="./app.js?v=12.6"></script>
 </body>
 </html>
