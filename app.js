@@ -20,6 +20,7 @@ const V11_SUPABASE_URL="https://koybcvdrbebeicxzitcf.supabase.co";
 const V11_PUBLIC_BUDGET_ENDPOINT=V11_SUPABASE_URL+"/functions/v1/public-budget";
 const V11_APPROVE_BUDGET_ENDPOINT=V11_SUPABASE_URL+"/functions/v1/approve-budget";
 const V11_CREATE_PIX_ENDPOINT=V11_SUPABASE_URL+"/functions/v1/create-mercadopago-pix";
+const V11_PUBLIC_PAYMENT_ENDPOINT=V11_SUPABASE_URL+"/functions/v1/public-payment";
 const V11_PILOT_APPROVAL_TOKEN="59de1bbc-cf56-4579-a72b-a8f8e46cfe9d";
 const V11_SUPABASE_PUBLISHABLE_KEY="sb_publishable_MxXw0bpUQ0RIXkhwFsILHw_TteIueoe";
 const supabaseClient=window.supabase?.createClient
@@ -1310,11 +1311,12 @@ function renderBudgetState(order){
   if(add) add.disabled=false;
   if(newRev) newRev.hidden=budgetEditable();
   if(approvalHint){
+    const paymentLabel=currentBudgetRevision?.payment_mode==="credit"?"Crediário / pagar depois":"Cobrar após aprovação";
     approvalHint.textContent=currentBudgetRevision?.status==="approved"
-      ?"Revisão aprovada. Alterações exigem nova revisão."
+      ?"Revisão aprovada · "+paymentLabel+"."
       : currentBudgetRevision?.status==="sent"
-        ?"Link enviado. Aguardando decisão do cliente."
-        :"Envie a revisão atual para aprovação.";
+        ?"Link enviado · "+paymentLabel+"."
+        :"Escolha como esta revisão será cobrada ao enviar.";
   }
 
   if(lines){
@@ -1335,7 +1337,7 @@ function renderBudgetState(order){
 async function loadServerBudget(order){
   const {data:revision,error}=await supabaseClient
     .from("budget_revisions")
-    .select("id,work_order_id,revision,status,subtotal,total,created_at,sent_at,approved_at")
+    .select("id,work_order_id,revision,status,subtotal,total,payment_mode,payment_due_at,payment_note,created_at,sent_at,approved_at")
     .eq("work_order_id",order.id)
     .order("revision",{ascending:false})
     .limit(1)
@@ -1347,7 +1349,7 @@ async function loadServerBudget(order){
     const {data:newRevision,error:createError}=await supabaseClient
       .from("budget_revisions")
       .insert({work_order_id:order.id,revision:1,status:"draft",subtotal:0,total:0,created_by:staffSession?.user?.id||null})
-      .select("id,work_order_id,revision,status,subtotal,total,created_at,sent_at,approved_at")
+      .select("id,work_order_id,revision,status,subtotal,total,payment_mode,payment_due_at,payment_note,created_at,sent_at,approved_at")
       .single();
     if(createError) throw createError;
     latest=newRevision;
@@ -1411,7 +1413,7 @@ async function recalcServerBudget(revisionId){
     .from("budget_revisions")
     .update({subtotal:total,total})
     .eq("id",revisionId)
-    .select("id,work_order_id,revision,status,subtotal,total,created_at,sent_at,approved_at")
+    .select("id,work_order_id,revision,status,subtotal,total,payment_mode,payment_due_at,payment_note,created_at,sent_at,approved_at")
     .single();
   if(updateError) throw updateError;
   currentBudgetRevision=data;
@@ -1432,9 +1434,12 @@ async function createEditableRevision(){
         status:"draft",
         subtotal:Number(old.subtotal||old.total||0),
         total:Number(old.total||0),
+        payment_mode:old.payment_mode||"pay_now",
+        payment_due_at:old.payment_due_at||null,
+        payment_note:old.payment_note||null,
         created_by:staffSession?.user?.id||null
       })
-      .select("id,work_order_id,revision,status,subtotal,total,created_at,sent_at,approved_at")
+      .select("id,work_order_id,revision,status,subtotal,total,payment_mode,payment_due_at,payment_note,created_at,sent_at,approved_at")
       .single();
     if(error) throw error;
 
@@ -1536,7 +1541,7 @@ async function deleteBudgetItem(itemId){
   }
   renderBudgetState(order);
 }
-async function sendBudgetForApproval(){
+async function sendBudgetForApproval(paymentMode=currentBudgetRevision?.payment_mode||"pay_now",paymentDueAt=null){
   const order=allOrders().find(o=>String(o.id)===String(selectedBudgetOrderId));
   if(!order) return;
   if(Number(currentBudgetRevision?.total||0)<=0){toast("Adicione itens antes de enviar.");return}
@@ -1548,10 +1553,23 @@ async function sendBudgetForApproval(){
     }
     if(currentBudgetRevision.status!=="sent"){
       const {data,error}=await supabaseClient.from("budget_revisions").update({
-        status:"sent",sent_at:new Date().toISOString()
-      }).eq("id",currentBudgetRevision.id).select("id,work_order_id,revision,status,subtotal,total,created_at,sent_at,approved_at").single();
+        status:"sent",
+        sent_at:new Date().toISOString(),
+        payment_mode:paymentMode,
+        payment_due_at:paymentMode==="credit"&&paymentDueAt?new Date(paymentDueAt+"T12:00:00").toISOString():null,
+        payment_note:paymentMode==="credit"?"Pagamento combinado para depois da aprovação.":"Pagamento solicitado após a aprovação."
+      }).eq("id",currentBudgetRevision.id).select("id,work_order_id,revision,status,subtotal,total,payment_mode,payment_due_at,payment_note,created_at,sent_at,approved_at").single();
       if(error) throw error;
       currentBudgetRevision=data;
+    }
+    if(currentBudgetRevision.status==="sent"){
+      const {data:updated,error:termsError}=await supabaseClient.from("budget_revisions").update({
+        payment_mode:paymentMode,
+        payment_due_at:paymentMode==="credit"&&paymentDueAt?new Date(paymentDueAt+"T12:00:00").toISOString():null,
+        payment_note:paymentMode==="credit"?"Pagamento combinado para depois da aprovação.":"Pagamento solicitado após a aprovação."
+      }).eq("id",currentBudgetRevision.id).select("id,work_order_id,revision,status,subtotal,total,payment_mode,payment_due_at,payment_note,created_at,sent_at,approved_at").single();
+      if(termsError) throw termsError;
+      currentBudgetRevision=updated;
     }
     let token=currentApprovalToken;
     if(!token){
@@ -1574,7 +1592,13 @@ async function sendBudgetForApproval(){
       actor_user_id:staffSession?.user?.id||null,
       actor_type:"user",
       event_type:"budget_sent",
-      payload:{budget_revision_id:currentBudgetRevision.id,revision:currentBudgetRevision.revision,total:currentBudgetRevision.total}
+      payload:{
+        budget_revision_id:currentBudgetRevision.id,
+        revision:currentBudgetRevision.revision,
+        total:currentBudgetRevision.total,
+        payment_mode:paymentMode,
+        payment_due_at:currentBudgetRevision.payment_due_at||null
+      }
     });
     await syncServerData({quiet:true});
     renderBudgetState(order);
@@ -1586,7 +1610,7 @@ async function sendBudgetForApproval(){
     toast("Não foi possível gerar um token de aprovação.");
     return;
   }
-  const link=location.origin+location.pathname+"?approval="+encodeURIComponent(currentApprovalToken)+"&v=12.4#aprovar";
+  const link=location.origin+location.pathname+"?approval="+encodeURIComponent(currentApprovalToken)+"&v=12.5#aprovar";
   try{await navigator.clipboard.writeText(link);toast("Link da revisão atual copiado.");}
   catch{toast("Revisão pronta para compartilhar.");}
 }
@@ -1624,12 +1648,45 @@ budgetItemForm?.addEventListener("submit",async event=>{
   }catch{toast("Não foi possível adicionar o item.");}
   finally{btn.disabled=false}
 });
-document.getElementById("copyApproval").addEventListener("click",async()=>{
-  try{await sendBudgetForApproval()}catch{toast("Não foi possível preparar a aprovação.")}
+const budgetSendSheet=document.getElementById("budgetSendSheet");
+function syncBudgetSendMode(){
+  const mode=document.querySelector('input[name="budgetPaymentMode"]:checked')?.value||"pay_now";
+  document.querySelectorAll("[data-send-mode-card]").forEach(card=>card.classList.toggle("active",card.dataset.sendModeCard===mode));
+  const due=document.getElementById("budgetDueField");
+  if(due) due.hidden=mode!=="credit";
+  const hint=document.getElementById("budgetSendHint");
+  if(hint) hint.textContent=mode==="credit"
+    ?"O cliente assina a aprovação agora; o valor entra no contas a receber sem exigir pagamento nesta tela."
+    :"Depois de assinar, a mesma página passa a funcionar como cobrança/fatura.";
+}
+document.querySelectorAll('input[name="budgetPaymentMode"]').forEach(input=>input.addEventListener("change",syncBudgetSendMode));
+
+document.getElementById("copyApproval").addEventListener("click",()=>{
+  const mode=currentBudgetRevision?.payment_mode||"pay_now";
+  const radio=document.querySelector('input[name="budgetPaymentMode"][value="'+mode+'"]');
+  if(radio) radio.checked=true;
+  const due=document.getElementById("budgetPaymentDueDate");
+  if(due&&currentBudgetRevision?.payment_due_at) due.value=new Date(currentBudgetRevision.payment_due_at).toISOString().slice(0,10);
+  syncBudgetSendMode();
+  openSheet(budgetSendSheet);
+});
+document.getElementById("confirmBudgetSend").addEventListener("click",async()=>{
+  const btn=document.getElementById("confirmBudgetSend");
+  const mode=document.querySelector('input[name="budgetPaymentMode"]:checked')?.value||"pay_now";
+  const due=document.getElementById("budgetPaymentDueDate")?.value||null;
+  btn.disabled=true;
+  try{
+    await sendBudgetForApproval(mode,due);
+    closeSheets();
+  }catch{
+    toast("Não foi possível preparar a aprovação.");
+  }finally{
+    btn.disabled=false;
+  }
 });
 document.getElementById("previewBudgetApproval").addEventListener("click",async()=>{
   if(!currentApprovalToken){
-    try{await sendBudgetForApproval()}catch{toast("Prepare o orçamento antes de visualizar.");return}
+    try{await sendBudgetForApproval(currentBudgetRevision?.payment_mode||"pay_now",currentBudgetRevision?.payment_due_at?new Date(currentBudgetRevision.payment_due_at).toISOString().slice(0,10):null)}catch{toast("Prepare o orçamento antes de visualizar.");return}
   }
   go("client-approval");
 });
@@ -1654,6 +1711,7 @@ async function loadPublicBudgetFromServer(){
     if(!response.ok) throw new Error(payload.error||"Falha ao carregar orçamento");
     remoteBudgetState=payload.budget;
     remoteApprovalState=payload.approval||null;
+    remoteBudgetState.payment_request=payload.payment_request||null;
 
     const order=payload.budget.order||{};
     const v=order.vehicle||{};
@@ -1663,6 +1721,7 @@ async function loadPublicBudgetFromServer(){
     if(meta) meta.textContent="ORÇAMENTO #"+String(order.number||"—").padStart(6,"0")+" · REVISÃO "+payload.budget.revision;
     if(vehicle) vehicle.textContent=vehicleText+" · "+plate;
     if(total) total.textContent=moneyBR(payload.budget.total);
+    renderPublicInvoiceTerms(payload.budget,payload.approval,payload.payment_request);
     if(items){
       items.innerHTML=(payload.budget.items||[]).map(item=>
         '<div><span>'+escapeHtml(item.description)+'</span><b>'+moneyBR(item.line_total)+'</b></div>'
@@ -1671,6 +1730,7 @@ async function loadPublicBudgetFromServer(){
     const input=document.getElementById("approvalName");
     if(input && order.customer?.name) input.value=order.customer.name;
     renderApprovalState();
+    renderPublicInvoiceTerms(remoteBudgetState,remoteApprovalState,remoteBudgetState?.payment_request||null);
     renderDashboard();
     renderOrders();
     return payload;
@@ -1679,6 +1739,55 @@ async function loadPublicBudgetFromServer(){
     if(items) items.innerHTML='<div><span>Erro ao carregar</span><b>!</b></div>';
     toast("Falha ao carregar orçamento real.");
     return null;
+  }
+}
+
+function renderPublicInvoiceTerms(budget,approval=null,paymentRequest=null){
+  const mode=budget?.payment_mode||"pay_now";
+  const title=document.getElementById("invoicePaymentModeTitle");
+  const text=document.getElementById("invoicePaymentModeText");
+  const panel=document.getElementById("publicPaymentPanel");
+  const payTitle=document.getElementById("publicPaymentTitle");
+  const payAmount=document.getElementById("publicPaymentAmount");
+  const payText=document.getElementById("publicPaymentText");
+  const payStatus=document.getElementById("publicPaymentStatus");
+  const approveBtn=document.getElementById("approveBudget");
+
+  if(title) title.textContent=mode==="credit"?"Crediário · pagar depois":"Pagamento após aprovação";
+  if(text){
+    text.textContent=mode==="credit"
+      ? (budget.payment_due_at?"Pagamento combinado para "+new Intl.DateTimeFormat("pt-BR").format(new Date(budget.payment_due_at))+".":"Aprovação agora; pagamento combinado diretamente com a oficina.")
+      :"Depois de aprovar e assinar, esta mesma página continua como cobrança.";
+  }
+  if(approveBtn&&!approval){
+    approveBtn.textContent=mode==="credit"?"✓ Aprovar e assinar":"✓ Aprovar e ir para pagamento";
+  }
+
+  if(!panel) return;
+  if(!approval || approval.decision!=="approved"){
+    panel.hidden=true;
+    return;
+  }
+
+  panel.hidden=false;
+  if(payAmount) payAmount.textContent=moneyBR(budget.total);
+  if(mode==="credit"){
+    if(payTitle) payTitle.textContent="Pagamento combinado para depois";
+    if(payText) payText.textContent=budget.payment_due_at
+      ?"Vencimento combinado: "+new Intl.DateTimeFormat("pt-BR").format(new Date(budget.payment_due_at))+"."
+      :"A oficina registrou esta venda em crediário. Nenhum pagamento é exigido nesta tela.";
+    if(payStatus) payStatus.textContent="✓ Orçamento aprovado · valor lançado no contas a receber.";
+    panel.classList.add("credit");
+    return;
+  }
+
+  panel.classList.remove("credit");
+  if(payTitle) payTitle.textContent=paymentRequest?.status==="approved"?"Pagamento confirmado":"Fatura aguardando pagamento";
+  if(payText) payText.textContent="O orçamento foi aprovado. O pagamento pode ser concluído pela cobrança vinculada a esta fatura.";
+  if(payStatus){
+    if(paymentRequest?.status==="approved") payStatus.textContent="✓ Pagamento confirmado.";
+    else if(paymentRequest?.status==="pending"||paymentRequest?.status==="processing") payStatus.textContent="Cobrança Pix gerada · aguardando confirmação.";
+    else payStatus.textContent="Cobrança online será disponibilizada após a conexão da conta Mercado Pago.";
   }
 }
 
@@ -2041,6 +2150,7 @@ function renderApprovalState(){
     const decided=record.decidedAt||record.created_at;
     const person=record.name||record.customer_name||"Cliente";
     out.innerHTML='<div><b>✓ Orçamento aprovado</b><span>Rev. '+rev+' · '+moneyBR(amount)+' · '+formatDecisionTime(decided)+'</span><span>'+escapeHtml(person)+'</span></div>'+(record.signatureData?'<div class="signature-receipt"><img src="'+record.signatureData+'" alt="Assinatura registrada"></div>':'');
+    if(remoteBudgetState) renderPublicInvoiceTerms(remoteBudgetState,record,remoteBudgetState.payment_request||null);
   }else{
     const rev=record.revision||remoteBudgetState?.revision||1;
     const amount=record.amount??remoteBudgetState?.total??0;
@@ -2606,13 +2716,13 @@ const staffAuthSheet=document.getElementById("staffAuthSheet");
 
 function openSheet(sheet){
   if(!sheet) return;
-  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,staffAuthSheet,pixPaymentSheet,osQuickSheet,budgetItemSheet].forEach(s=>{if(s && s!==sheet)s.hidden=true});
+  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,staffAuthSheet,pixPaymentSheet,osQuickSheet,budgetItemSheet,budgetSendSheet].forEach(s=>{if(s && s!==sheet)s.hidden=true});
   sheet.hidden=false;
   document.body.classList.add("sheet-open");
   document.body.classList.remove("no-scroll");
 }
 function closeSheets(){
-  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,staffAuthSheet,pixPaymentSheet,osQuickSheet,budgetItemSheet].forEach(s=>{if(s)s.hidden=true});
+  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,staffAuthSheet,pixPaymentSheet,osQuickSheet,budgetItemSheet,budgetSendSheet].forEach(s=>{if(s)s.hidden=true});
   document.body.classList.remove("sheet-open");
   queueScrollLock();
 }
