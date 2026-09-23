@@ -2675,3 +2675,139 @@ body.sheet-open .internal-access-gate{
     grid-template-columns:repeat(6,minmax(230px,1fr));
   }
 }
+
+
+/* ===== v13.1 desktop drawers and split budget ===== */
+@media(min-width:1100px){
+  body:not(.public-mode) .desktop-budget-layout{
+    display:grid;
+    grid-template-columns:minmax(520px,1.5fr) minmax(320px,.72fr);
+    gap:16px;
+    align-items:start;
+  }
+  body:not(.public-mode) .desktop-budget-main{
+    min-width:0;
+    padding:14px;
+    border:1px solid #293036;
+    border-radius:14px;
+    background:#101416;
+  }
+  body:not(.public-mode) .desktop-budget-side{
+    position:sticky;
+    top:76px;
+    display:grid;
+    gap:8px;
+    padding:14px;
+    border:1px solid #293036;
+    border-radius:14px;
+    background:#101416;
+  }
+  .desktop-side-title{
+    padding-bottom:10px;
+    border-bottom:1px solid #293036;
+  }
+  .desktop-side-title span,.desktop-side-title b{display:block}
+  .desktop-side-title span{
+    color:#69737a;
+    font-size:7px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.6px;
+  }
+  .desktop-side-title b{margin-top:3px;font-size:13px}
+  .desktop-budget-note{
+    margin-top:3px;
+    padding:10px;
+    border:1px solid #2a3136;
+    border-radius:10px;
+    background:#0d1113;
+  }
+  .desktop-budget-note span{
+    color:#747f86;
+    font-size:7px;
+    font-weight:900;
+    text-transform:uppercase;
+  }
+  .desktop-budget-note p{
+    margin:5px 0 0;
+    color:#8e989e;
+    font-size:8px;
+    line-height:1.45;
+  }
+  body:not(.public-mode) .budget-sheet{
+    min-height:260px;
+  }
+  body:not(.public-mode) .budget-line{
+    min-height:64px;
+    padding:12px;
+  }
+  body:not(.public-mode) .budget-line-copy b{font-size:11px}
+  body:not(.public-mode) .budget-line-copy small{font-size:8px}
+  body:not(.public-mode) .budget-line-value strong{font-size:12px}
+  body:not(.public-mode) .budget-edit-actions{
+    grid-template-columns:1fr 1fr;
+  }
+
+  body:not(.public-mode) .sheet-card{
+    position:absolute;
+    top:0;
+    right:0;
+    bottom:0;
+    left:auto;
+    width:min(470px,42vw);
+    max-width:none;
+    max-height:100vh!important;
+    height:100vh;
+    overflow:auto;
+    border-radius:18px 0 0 18px;
+    padding:18px;
+    box-shadow:-22px 0 60px rgba(0,0,0,.38);
+  }
+  body:not(.public-mode) .sheet-handle{display:none}
+  body:not(.public-mode) .sheet-backdrop{
+    background:rgba(0,0,0,.55);
+    backdrop-filter:blur(4px);
+  }
+  body:not(.public-mode) .budget-composer-card{
+    width:min(620px,52vw);
+  }
+  body:not(.public-mode) .budget-catalog-results{
+    max-height:52vh;
+  }
+  body:not(.public-mode) .auth-sheet-card{
+    width:min(460px,40vw);
+  }
+
+  body:not(.public-mode) #osWizard{
+    max-width:920px;
+  }
+  body:not(.public-mode) .form-card,
+  body:not(.public-mode) .summary-card{
+    padding:18px;
+  }
+  body:not(.public-mode) .capture-grid{
+    grid-template-columns:repeat(5,minmax(120px,1fr));
+  }
+  body:not(.public-mode) .capture-card.optional{
+    grid-column:auto;
+  }
+  body:not(.public-mode) .wizard-actions{
+    position:static;
+    max-width:920px;
+    background:none;
+    padding:0;
+  }
+
+  body:not(.public-mode) .os-hero{
+    max-width:1180px;
+  }
+  body:not(.public-mode) .os-cover{
+    height:128px;
+  }
+  body:not(.public-mode) .tab-content{
+    min-height:280px;
+  }
+  body:not(.public-mode) .evidence-grid{
+    grid-template-columns:repeat(4,minmax(0,1fr));
+  }
+}
