@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
     const { data: budget, error: budgetError } = await supabase
       .from("budget_revisions")
       .select(`
-        id, revision, status, subtotal, total, work_order_id,
+        id, revision, status, subtotal, total, payment_mode, payment_due_at, payment_note, work_order_id,
         budget_items(id, kind, description, quantity, unit_price, line_total, sort_order),
         work_orders!inner(id, number, status, customer_id, vehicle_id,
           customers!inner(id, name),
@@ -51,12 +51,23 @@ Deno.serve(async (req) => {
       .eq("budget_revision_id", budget.id)
       .maybeSingle();
 
+    const { data: paymentRequest } = await supabase
+      .from("payment_requests")
+      .select("public_token,status,amount,method,pix_copy_paste,pix_qr_code_base64,payment_url,expires_at,created_at")
+      .eq("budget_revision_id", budget.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
     return Response.json({
       budget: {
         id: budget.id,
         revision: budget.revision,
         status: budget.status,
         total: budget.total,
+        payment_mode: budget.payment_mode || "pay_now",
+        payment_due_at: budget.payment_due_at,
+        payment_note: budget.payment_note,
         items: [...(budget.budget_items || [])].sort((a,b)=>a.sort_order-b.sort_order),
         order: {
           id: budget.work_orders.id,
@@ -67,6 +78,7 @@ Deno.serve(async (req) => {
         },
       },
       approval,
+      payment_request: paymentRequest || null,
     }, { headers: { ...cors, "Cache-Control": "no-store" } });
   } catch (error) {
     return Response.json({ error: "server_error", detail: String(error) }, { status: 500, headers: cors });
