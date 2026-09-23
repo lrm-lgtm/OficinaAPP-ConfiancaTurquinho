@@ -2313,3 +2313,365 @@ body.sheet-open .internal-access-gate{
   .catalog-result-main{grid-template-columns:28px minmax(0,1fr) auto 27px;padding:7px}
   .budget-line-value strong{width:100%;text-align:right}
 }
+
+
+/* ===== v13.0 desktop management workspace ===== */
+.desktop-sidebar{display:none}
+
+@media(min-width:1100px){
+  body:not(.public-mode){
+    padding:0 0 0 236px;
+    min-height:100vh;
+    background:#090b0d;
+  }
+  body:not(.public-mode) .desktop-sidebar{
+    position:fixed;
+    inset:0 auto 0 0;
+    z-index:70;
+    width:236px;
+    display:flex;
+    flex-direction:column;
+    padding:18px 14px 14px;
+    border-right:1px solid #252b30;
+    background:linear-gradient(180deg,#101316,#0b0e10 56%,#090b0d);
+    box-shadow:14px 0 40px rgba(0,0,0,.18);
+  }
+  .desktop-brand{
+    padding:4px 5px 18px;
+    border-bottom:1px solid #252b30;
+  }
+  .desktop-brand-logo{
+    display:block;
+    width:190px!important;
+    height:54px!important;
+    max-width:190px!important;
+  }
+  .desktop-brand small{
+    display:block;
+    margin-top:5px;
+    color:#667078;
+    font-size:8px;
+    font-weight:900;
+    letter-spacing:1.4px;
+  }
+  .desktop-nav{
+    display:grid;
+    gap:4px;
+    padding:16px 0;
+  }
+  .desktop-nav>button{
+    width:100%;
+    min-height:42px;
+    display:grid;
+    grid-template-columns:30px 1fr auto;
+    align-items:center;
+    gap:8px;
+    padding:0 10px;
+    border:1px solid transparent;
+    border-radius:10px;
+    background:transparent;
+    color:#939ca3;
+    text-align:left;
+  }
+  .desktop-nav>button>span{
+    display:grid;
+    place-items:center;
+    width:28px;
+    height:28px;
+    border-radius:8px;
+    background:#15191c;
+    color:#aeb6bb;
+    font-size:13px;
+  }
+  .desktop-nav>button b{font-size:10px}
+  .desktop-nav>button em{
+    color:#5d666c;
+    font-size:6.5px;
+    font-style:normal;
+  }
+  .desktop-nav>button.active{
+    border-color:#49302d;
+    background:#211514;
+    color:#fff;
+  }
+  .desktop-nav>button.active>span{
+    background:#e83c30;
+    color:#fff;
+  }
+  .desktop-nav-label{
+    margin:12px 10px 4px;
+    color:#545e65;
+    font-size:7px;
+    font-weight:900;
+    letter-spacing:1px;
+    text-transform:uppercase;
+  }
+  .desktop-user{
+    margin-top:auto;
+    display:grid;
+    grid-template-columns:10px 1fr 28px;
+    gap:8px;
+    align-items:center;
+    padding:10px;
+    border:1px solid #282f34;
+    border-radius:11px;
+    background:#121619;
+  }
+  .desktop-user-dot{
+    width:8px;height:8px;border-radius:50%;background:#3bc87a;
+    box-shadow:0 0 0 4px rgba(59,200,122,.08);
+  }
+  .desktop-user b,.desktop-user small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .desktop-user b{font-size:8.5px}
+  .desktop-user small{margin-top:2px;color:#707a81;font-size:7px}
+  .desktop-user button{
+    width:28px;height:28px;border:0;border-radius:8px;background:#1d2226;color:#929ba1;
+  }
+
+  body:not(.public-mode) .appbar{
+    position:sticky;
+    left:236px;
+    height:58px;
+    padding:7px 24px;
+    background:rgba(9,11,13,.94);
+  }
+  body:not(.public-mode) .appbar .brandlockup{display:none}
+  body:not(.public-mode) .appbar:before{
+    content:"Auto Mecânica Confiança · Gestão";
+    flex:1;
+    color:#90999f;
+    font-size:9px;
+    font-weight:800;
+    letter-spacing:.2px;
+  }
+  body:not(.public-mode) .appbar-back{order:-1}
+  body:not(.public-mode) .bottomnav{display:none!important}
+  body:not(.public-mode) main{
+    max-width:none;
+    width:100%;
+    margin:0;
+  }
+  body:not(.public-mode) .view{
+    padding:22px 28px 36px;
+    min-height:calc(100vh - 58px)!important;
+  }
+  body:not(.public-mode) .compact-greeting{
+    margin:0 0 14px;
+  }
+  body:not(.public-mode) .compact-greeting h1{font-size:26px}
+  body:not(.public-mode) .compact-stats{
+    grid-template-columns:1.2fr repeat(3,.62fr);
+    max-width:850px;
+  }
+  body:not(.public-mode) .stat-main,
+  body:not(.public-mode) .stat-chip{min-height:68px}
+  body:not(.public-mode) .health-strip{
+    max-width:720px;
+    grid-template-columns:repeat(4,1fr);
+  }
+  body:not(.public-mode) .stage-tabs{display:none}
+  body:not(.public-mode) .flow-panel{
+    border:0;
+    background:transparent;
+    overflow:visible;
+  }
+  body:not(.public-mode) .flow-panel-head{
+    margin-bottom:8px;
+    border:1px solid #293036;
+    border-radius:12px;
+  }
+  body:not(.public-mode) .desktop-kanban-board{
+    display:grid!important;
+    grid-template-columns:repeat(6,minmax(220px,1fr));
+    gap:8px;
+    padding:0!important;
+    overflow-x:auto!important;
+    align-items:start;
+  }
+  .desktop-kanban-column{
+    min-width:220px;
+    min-height:420px;
+    border:1px solid #293036;
+    border-radius:12px;
+    background:#0f1315;
+    overflow:hidden;
+  }
+  .desktop-kanban-column>header{
+    min-height:58px;
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:8px;
+    padding:10px;
+    border-bottom:1px solid #293036;
+    background:#15191c;
+  }
+  .desktop-kanban-column>header b,
+  .desktop-kanban-column>header small{display:block}
+  .desktop-kanban-column>header b{font-size:10px}
+  .desktop-kanban-column>header small{
+    margin-top:3px;
+    color:#69737a;
+    font-size:6.7px;
+    line-height:1.25;
+  }
+  .desktop-kanban-column>header>span{
+    min-width:23px;height:23px;display:grid;place-items:center;border-radius:8px;
+    background:#242a2e;color:#bdc5ca;font-size:8px;font-weight:900;
+  }
+  .desktop-kanban-cards{
+    display:grid;
+    gap:6px;
+    padding:7px;
+  }
+  .desktop-kanban-column .flow-card{border-radius:10px}
+  .desktop-kanban-column .flow-card-open{
+    grid-template-columns:1fr;
+    padding:9px 34px 9px 9px;
+  }
+  .desktop-kanban-column .health-badge{
+    justify-self:start;
+    grid-row:2;
+  }
+  .desktop-kanban-column .flow-times{
+    grid-template-columns:1fr;
+    gap:5px;
+  }
+  .desktop-kanban-column .flow-owner{text-align:left}
+  .desktop-column-empty{
+    padding:22px 8px;
+    color:#59636a;
+    text-align:center;
+    font-size:8px;
+  }
+
+  body:not(.public-mode) .page-title h1{font-size:24px}
+  body:not(.public-mode) .search{max-width:520px}
+  body:not(.public-mode) .chips{max-width:720px}
+
+  body:not(.public-mode) #orderList.stack,
+  body:not(.public-mode) #clientList.stack{display:block}
+  .desktop-os-table,
+  .desktop-client-table{
+    border:1px solid #293036;
+    border-radius:13px;
+    background:#111416;
+    overflow:hidden;
+  }
+  .desktop-os-head{
+    display:grid;
+    grid-template-columns:130px minmax(220px,1.5fr) minmax(170px,1fr) 150px 180px 150px;
+    gap:0;
+    min-height:38px;
+    align-items:center;
+    padding:0 10px;
+    background:#171b1e;
+    border-bottom:1px solid #293036;
+    color:#667078;
+    font-size:7px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.45px;
+  }
+  .desktop-os-row{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) 150px;
+    border-bottom:1px solid #23292e;
+  }
+  .desktop-os-row:last-child{border-bottom:0}
+  .desktop-os-main{
+    display:grid;
+    grid-template-columns:130px minmax(220px,1.5fr) minmax(170px,1fr) 150px 180px;
+    gap:0;
+    min-height:60px;
+    align-items:center;
+    padding:0 10px;
+    border:0;
+    background:transparent;
+    color:#e8ecee;
+    text-align:left;
+  }
+  .desktop-os-main:hover,.desktop-client-row:hover{background:#171c1f}
+  .desktop-os-main>div{min-width:0;padding-right:12px}
+  .desktop-os-main b,.desktop-os-main small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .desktop-os-main b{font-size:9px}
+  .desktop-os-main small{margin-top:3px;color:#707a81;font-size:7.5px}
+  .desktop-health{
+    display:inline-flex;
+    padding:5px 7px;
+    border-radius:999px;
+    background:#23292d;
+    color:#b5bdc2;
+    font-size:7px;
+    font-weight:900;
+    white-space:nowrap;
+  }
+  .desktop-health.danger{background:#321614;color:#ff9187}
+  .desktop-health.warning{background:#30240e;color:#efc15f}
+  .desktop-health.parts{background:#30270f;color:#e2c46b}
+  .desktop-health.customer{background:#211a35;color:#b9a5ef}
+  .desktop-health.ready{background:#123020;color:#6bdd9d}
+  .desktop-os-actions{
+    display:grid;
+    grid-template-columns:1fr 34px;
+    gap:4px;
+    align-items:center;
+    padding:8px;
+  }
+  .desktop-os-actions button{
+    min-height:34px;
+    border:1px solid #343b40;
+    border-radius:8px;
+    background:#1d2327;
+    color:#d6dcdf;
+    font-size:7.5px;
+    font-weight:900;
+  }
+  .desktop-os-actions button:first-child{background:#282f34}
+  .desktop-table-empty{padding:24px;color:#6d777d;text-align:center;font-size:9px}
+
+  .desktop-client-head{
+    display:grid;
+    grid-template-columns:52px minmax(240px,1fr) minmax(260px,1.2fr) 120px;
+    align-items:center;
+    min-height:38px;
+    padding:0 12px;
+    background:#171b1e;
+    border-bottom:1px solid #293036;
+    color:#667078;
+    font-size:7px;
+    font-weight:900;
+    text-transform:uppercase;
+  }
+  .desktop-client-row{
+    display:grid;
+    grid-template-columns:52px minmax(240px,1fr) minmax(260px,1.2fr) 120px;
+    align-items:center;
+    min-height:62px;
+    padding:0 12px;
+    border-bottom:1px solid #23292e;
+  }
+  .desktop-client-row:last-child{border-bottom:0}
+  .desktop-client-avatar{
+    width:34px;height:34px;display:grid;place-items:center;border-radius:10px;
+    background:#242a2e;color:#f1f3f4;font-size:11px;font-weight:900;
+  }
+  .desktop-client-row b,.desktop-client-row small{display:block}
+  .desktop-client-row b{font-size:9px}
+  .desktop-client-row small{margin-top:3px;color:#717b82;font-size:7.5px}
+
+  body:not(.public-mode) .finance-kpis{
+    grid-template-columns:repeat(3,minmax(180px,260px));
+    justify-content:start;
+  }
+  body:not(.public-mode) .finance-list{max-width:1000px}
+
+  body.staff-locked:not(.public-mode) .desktop-sidebar{opacity:.28;pointer-events:none}
+  body:not(.public-mode) .internal-access-gate{left:236px}
+}
+
+@media(min-width:1450px){
+  body:not(.public-mode) .desktop-kanban-board{
+    grid-template-columns:repeat(6,minmax(230px,1fr));
+  }
+}
