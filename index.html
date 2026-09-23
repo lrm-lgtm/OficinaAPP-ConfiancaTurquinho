@@ -7,7 +7,7 @@
   <meta name="description" content="Auto Mecânica Confiança — gestão de oficina">
   <title>Auto Mecânica Confiança</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=12.6">
+  <link rel="stylesheet" href="./styles.css?v=13.0">
 </head>
 <body>
   <header class="appbar">
@@ -18,6 +18,31 @@
     <button class="appbar-action auth-action" id="authStatusBtn" aria-label="Acesso interno" title="Acesso interno">○</button>
     <button class="appbar-action install-action" id="installBtn" hidden aria-label="Instalar aplicativo" title="Instalar aplicativo">⇩</button>
   </header>
+
+  <aside class="desktop-sidebar" id="desktopSidebar" aria-label="Gestão da oficina">
+    <div class="desktop-brand">
+      <span class="brand-logo-art desktop-brand-logo" role="img" aria-label="Auto Mecânica Confiança"></span>
+      <small>GESTÃO DA OFICINA</small>
+    </div>
+
+    <nav class="desktop-nav">
+      <button class="active" data-go="dashboard"><span>⌂</span><b>Visão geral</b></button>
+      <button data-go="orders"><span>▤</span><b>Ordens de serviço</b></button>
+      <button data-go="clients"><span>●</span><b>Clientes</b></button>
+      <button data-go="new-os"><span>＋</span><b>Nova OS</b></button>
+      <div class="desktop-nav-label">Operação</div>
+      <button data-go="mechanic"><span>⚙</span><b>Execução</b></button>
+      <button data-go="stock"><span>▦</span><b>Estoque</b><em>em evolução</em></button>
+      <div class="desktop-nav-label">Gestão</div>
+      <button data-go="finance"><span>R$</span><b>Financeiro</b></button>
+    </nav>
+
+    <div class="desktop-user">
+      <div class="desktop-user-dot"></div>
+      <div><b id="desktopStaffName">Acesso interno</b><small id="desktopStaffRole">Conectando…</small></div>
+      <button type="button" id="desktopAuthBtn" aria-label="Conta">•••</button>
+    </div>
+  </aside>
 
   <section class="internal-access-gate" id="internalAccessGate" hidden>
     <div class="gate-card">
@@ -32,7 +57,7 @@
   </section>
 
   <main id="app">
-    <section class="view active" data-view="dashboard">
+    <section class="view active desktop-workspace" data-view="dashboard">
       <div class="compact-greeting">
         <div><span class="muted">Operação de hoje</span><h1>Olá 👋</h1></div>
         <button class="icon-action" id="globalSearchBtn" aria-label="Busca rápida">⌕</button>
@@ -76,7 +101,7 @@
       </div>
     </section>
 
-    <section class="view" data-view="orders">
+    <section class="view desktop-workspace" data-view="orders">
       <div class="page-title"><div><span>Operação</span><h1>Ordens de serviço</h1></div><button class="btn primary compact" data-go="new-os">＋ Nova</button></div>
       <label class="search"><span>⌕</span><input id="orderSearch" placeholder="Buscar placa, cliente ou OS"></label>
       <div class="chips">
@@ -88,7 +113,7 @@
       <div class="stack" id="orderList"></div>
     </section>
 
-    <section class="view" data-view="clients">
+    <section class="view desktop-workspace" data-view="clients">
       <div class="page-title"><div><span>Relacionamento</span><h1>Clientes</h1></div><button class="btn primary compact" id="newClientBtn">＋ Novo</button></div>
       <label class="search"><span>⌕</span><input id="clientSearch" placeholder="Buscar nome, telefone ou veículo"></label>
       <div class="stack" id="clientList"></div>
@@ -173,7 +198,7 @@
       <div id="osDetail"></div>
     </section>
 
-    <section class="view" data-view="budget">
+    <section class="view desktop-workspace desktop-budget-view" data-view="budget">
       <div class="page-title">
         <div><span id="budgetOrderRef">OS</span><h1>Orçamento</h1></div>
         <span class="status waiting" id="budgetStatus">Carregando</span>
@@ -291,7 +316,7 @@
       </div>
     </section>
 
-    <section class="view internal-only" data-view="finance">
+    <section class="view internal-only desktop-workspace" data-view="finance">
       <div class="page-title"><div><span>Somente interno</span><h1>Financeiro</h1></div><span class="status open">Privado</span></div>
 
       <div class="finance-kpis">
@@ -581,6 +606,6 @@
 
   <div class="toast" id="toast"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./app.js?v=12.6"></script>
+  <script src="./app.js?v=13.0"></script>
 </body>
 </html>
