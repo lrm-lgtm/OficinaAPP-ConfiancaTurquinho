@@ -108,6 +108,10 @@ function renderStaffAuthState(message=""){
         ?"Conta criada, mas ainda sem permissão para dados da oficina. Um responsável precisa liberar este usuário."
         :"Entre para acessar os dados reais da oficina.");
   }
+  const desktopName=document.getElementById("desktopStaffName");
+  const desktopRole=document.getElementById("desktopStaffRole");
+  if(desktopName) desktopName.textContent=active?(staffProfile?.full_name||staffSession?.user?.email||"Usuário"):"Acesso interno";
+  if(desktopRole) desktopRole.textContent=active?staffRoleLabel(staffProfile?.role):(logged?"Aguardando liberação":"Entrar");
   syncInternalAccessGate(message);
 }
 async function refreshStaffSession(message=""){
@@ -184,7 +188,12 @@ function moneyBR(value){
   return new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(Number(value||0));
 }
 
+function isDesktopUI(){
+  return window.matchMedia("(min-width:1100px)").matches && !document.body.classList.contains("public-mode");
+}
+
 const views=[...document.querySelectorAll(".view")];
+const desktopNav=[...document.querySelectorAll(".desktop-nav [data-go]")];
 const bottom=[...document.querySelectorAll(".bottomnav button")];
 const toastEl=document.getElementById("toast");
 const appBack=document.getElementById("appBack");
@@ -215,6 +224,7 @@ function go(name){
   document.body.classList.toggle("public-mode",publicMode);
   views.forEach(v=>v.classList.toggle("active",v.dataset.view===name));
   bottom.forEach(b=>b.classList.toggle("active",b.dataset.go===name));
+  desktopNav.forEach(b=>b.classList.toggle("active",b.dataset.go===name));
   const moreBtn=document.getElementById("moreNavBtn");
   if(moreBtn) moreBtn.classList.toggle("active",["stock","mechanic","finance"].includes(name));
   appBack.hidden=publicMode || ["dashboard","orders","clients"].includes(name);
@@ -838,9 +848,30 @@ function renderKanban(orders){
   if(subtitle) subtitle.textContent=stage.subtitle+healthLabel;
   if(viewCount) viewCount.textContent=list.length+" "+(list.length===1?"OS":"OS");
 
-  board.innerHTML=list.length
-    ? list.map(kanbanCard).join("")
-    : '<div class="flow-empty"><b>Nada por aqui</b><span>Nenhuma OS nesta combinação de etapa e alerta.</span></div>';
+  if(isDesktopUI()){
+    const desktopStages=stageDefinitions.filter(s=>s.key!=="today");
+    const visibleOrders=currentKanbanHealth
+      ? orders.filter(o=>currentKanbanHealth==="blocked"
+          ? ["blocked","waiting_parts","waiting_customer"].includes(kanbanHealth(o))
+          : kanbanHealth(o)===currentKanbanHealth)
+      : orders;
+    board.classList.add("desktop-kanban-board");
+    board.innerHTML=desktopStages.map(stageDef=>{
+      const rows=visibleOrders.filter(o=>kanbanStage(o)===stageDef.key).sort((a,b)=>priorityRank(a)-priorityRank(b));
+      return '<section class="desktop-kanban-column">'+
+        '<header><div><b>'+escapeHtml(stageDef.label)+'</b><small>'+escapeHtml(stageDef.subtitle)+'</small></div><span>'+rows.length+'</span></header>'+
+        '<div class="desktop-kanban-cards">'+(rows.length?rows.map(kanbanCard).join(""):'<div class="desktop-column-empty">Sem OS</div>')+'</div>'+
+      '</section>';
+    }).join("");
+    if(title) title.textContent="Fluxo completo da oficina";
+    if(subtitle) subtitle.textContent=currentKanbanHealth?"Filtro de saúde ativo":"Arraste a visão horizontalmente se necessário";
+    if(viewCount) viewCount.textContent=visibleOrders.length+" OS";
+  }else{
+    board.classList.remove("desktop-kanban-board");
+    board.innerHTML=list.length
+      ? list.map(kanbanCard).join("")
+      : '<div class="flow-empty"><b>Nada por aqui</b><span>Nenhuma OS nesta combinação de etapa e alerta.</span></div>';
+  }
 
   board.querySelectorAll("[data-open-os]").forEach(btn=>btn.onclick=()=>openDetail(btn.dataset.openOs));
   board.querySelectorAll("[data-quick-os]").forEach(btn=>btn.onclick=event=>{
@@ -887,6 +918,27 @@ function renderDashboard(){
   queueScrollLock();
 }
 
+function desktopOrderRow(o){
+  const health=healthInfo(o);
+  const timing=healthTimingLabel(o);
+  return '<article class="desktop-os-row">'+
+    '<button class="desktop-os-main" data-open-os="'+o.id+'">'+
+      '<div><b>'+escapeHtml(o.ref)+'</b><small>'+escapeHtml(o.plate)+'</small></div>'+
+      '<div><b>'+escapeHtml(o.vehicle)+'</b><small>'+escapeHtml(o.customer)+'</small></div>'+
+      '<div><b>'+escapeHtml(o.stage)+'</b><small>'+escapeHtml(o.status)+'</small></div>'+
+      '<div><span class="desktop-health '+health.cls+'">'+health.label+(timing?' · '+escapeHtml(timing):'')+'</span></div>'+
+      '<div><b>'+escapeHtml(o.promised||"A definir")+'</b><small>'+escapeHtml(o.owner||"Equipe")+'</small></div>'+
+    '</button>'+
+    '<div class="desktop-os-actions"><button data-order-action="'+o.id+'">'+contextualAction(o)+'</button><button data-quick-os="'+o.id+'">•••</button></div>'+
+  '</article>';
+}
+function desktopOrdersTable(list){
+  return '<div class="desktop-os-table">'+
+    '<div class="desktop-os-head"><span>OS / placa</span><span>Veículo / cliente</span><span>Etapa</span><span>Saúde</span><span>Prazo / responsável</span><span>Ações</span></div>'+
+    (list.length?list.map(desktopOrderRow).join(""):'<div class="desktop-table-empty">Nenhuma OS encontrada.</div>')+
+  '</div>';
+}
+
 function renderOrders(){
   const q=(document.getElementById("orderSearch")?.value||"").toLowerCase().trim();
   const list=allOrders().filter(o=>{
@@ -894,7 +946,9 @@ function renderOrders(){
     const qOk=!q||[o.ref,o.plate,o.vehicle,o.customer,o.status,o.stage].join(" ").toLowerCase().includes(q);
     return filterOk&&qOk;
   });
-  document.getElementById("orderList").innerHTML=list.length?list.map(orderCard).join(""):'<div class="muted">Nenhuma OS encontrada.</div>';
+  document.getElementById("orderList").innerHTML=isDesktopUI()
+    ? desktopOrdersTable(list)
+    : (list.length?list.map(orderCard).join(""):'<div class="muted">Nenhuma OS encontrada.</div>');
   bindOrderOpeners();
   queueScrollLock();
 }
@@ -911,13 +965,30 @@ document.querySelectorAll("[data-filter-jump]").forEach(btn=>btn.addEventListene
   go("orders");
 }));
 
+function desktopClientRow(c){
+  return '<article class="desktop-client-row" data-client-id="'+c.id+'">'+
+    '<div class="desktop-client-avatar">'+escapeHtml(c.name.charAt(0).toUpperCase())+'</div>'+
+    '<div><b>'+escapeHtml(c.name)+'</b><small>'+escapeHtml(c.phone)+'</small></div>'+
+    '<div><b>'+escapeHtml(c.vehicle)+'</b><small>Veículo principal</small></div>'+
+    '<div><b>'+Number(c.orders||0)+'</b><small>Ordens</small></div>'+
+  '</article>';
+}
+function desktopClientsTable(list){
+  return '<div class="desktop-client-table">'+
+    '<div class="desktop-client-head"><span></span><span>Cliente</span><span>Veículo</span><span>Histórico</span></div>'+
+    (list.length?list.map(desktopClientRow).join(""):'<div class="desktop-table-empty">Nenhum cliente encontrado.</div>')+
+  '</div>';
+}
+
 function clientCard(c){
   return '<article class="client-card" data-client-id="'+c.id+'"><div class="avatar">'+c.name.charAt(0).toUpperCase()+'</div><div style="flex:1"><h3>'+c.name+'</h3><p>'+c.phone+'</p><p>'+c.vehicle+'</p></div><span class="status open">'+c.orders+' OS</span></article>';
 }
 function renderClients(){
   const q=(document.getElementById("clientSearch").value||"").toLowerCase().trim();
   const list=allClients().filter(c=>!q||[c.name,c.phone,c.vehicle].join(" ").toLowerCase().includes(q));
-  document.getElementById("clientList").innerHTML=list.map(clientCard).join("");
+  document.getElementById("clientList").innerHTML=isDesktopUI()
+    ? desktopClientsTable(list)
+    : list.map(clientCard).join("");
   queueScrollLock();
 }
 document.getElementById("clientSearch").addEventListener("input",renderClients);
@@ -2933,6 +3004,7 @@ document.querySelectorAll("[data-close-sheet]").forEach(btn=>btn.addEventListene
 document.getElementById("quickActionBtn")?.addEventListener("click",()=>openSheet(quickActionSheet));
 document.getElementById("moreNavBtn")?.addEventListener("click",()=>openSheet(moreSheet));
 document.getElementById("authStatusBtn")?.addEventListener("click",()=>openSheet(staffAuthSheet));
+document.getElementById("desktopAuthBtn")?.addEventListener("click",()=>openSheet(staffAuthSheet));
 document.getElementById("internalAccessGateBtn")?.addEventListener("click",()=>openSheet(staffAuthSheet));
 document.getElementById("staffAccessShortcut")?.addEventListener("click",()=>{closeSheets();openSheet(staffAuthSheet)});
 document.getElementById("staffLoginBtn")?.addEventListener("click",staffLogin);
@@ -2983,6 +3055,13 @@ renderDashboard();
 renderOrders();
 renderClients();
 renderFinance();
+
+const desktopMedia=window.matchMedia("(min-width:1100px)");
+desktopMedia.addEventListener?.("change",()=>{
+  renderDashboard();
+  renderOrders();
+  renderClients();
+});
 updatePhotoProgress();
 renderApprovalState();
 
