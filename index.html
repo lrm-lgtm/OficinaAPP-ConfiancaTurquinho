@@ -7,7 +7,7 @@
   <meta name="description" content="Auto Mecânica Confiança — gestão de oficina">
   <title>Auto Mecânica Confiança</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=13.0">
+  <link rel="stylesheet" href="./styles.css?v=13.1">
 </head>
 <body>
   <header class="appbar">
@@ -204,31 +204,44 @@
         <span class="status waiting" id="budgetStatus">Carregando</span>
       </div>
 
-      <div class="budget-revision-bar">
-        <div><span>Revisão</span><b id="budgetRevisionLabel">—</b></div>
-        <small id="budgetLockHint">Carregando orçamento…</small>
-      </div>
+      <div class="desktop-budget-layout">
+        <div class="desktop-budget-main">
+          <div class="budget-revision-bar">
+            <div><span>Revisão</span><b id="budgetRevisionLabel">—</b></div>
+            <small id="budgetLockHint">Carregando orçamento…</small>
+          </div>
 
-      <div class="budget-sheet" id="budgetLines">
-        <div class="budget-empty">Carregando itens…</div>
-      </div>
+          <div class="budget-sheet" id="budgetLines">
+            <div class="budget-empty">Carregando itens…</div>
+          </div>
 
-      <div class="budget-total budget-total-dynamic"><span>Total</span><strong id="budgetInternalTotal">R$ 0,00</strong></div>
+          <div class="budget-total budget-total-dynamic"><span>Total</span><strong id="budgetInternalTotal">R$ 0,00</strong></div>
 
-      <div class="budget-edit-actions">
-        <button class="btn secondary full" id="addBudgetItem">＋ Adicionar item</button>
-        <button class="btn secondary full" id="newBudgetRevision" hidden>↺ Criar nova revisão</button>
-      </div>
+          <div class="budget-edit-actions">
+            <button class="btn secondary full" id="addBudgetItem">＋ Adicionar item</button>
+            <button class="btn secondary full" id="newBudgetRevision" hidden>↺ Criar nova revisão</button>
+          </div>
+        </div>
 
-      <div class="send-card">
-        <div><b>Aprovação do cliente</b><small id="budgetApprovalHint">Envie a revisão atual para aprovação.</small></div>
-        <button class="btn primary" id="copyApproval">Enviar / link</button>
-      </div>
-      <button class="btn primary full" id="previewBudgetApproval">Visualizar aprovação do cliente</button>
+        <aside class="desktop-budget-side">
+          <div class="desktop-side-title"><span>Cliente</span><b>Aprovação e cobrança</b></div>
 
-      <div class="send-card payment-provider-card">
-        <div><b>Recebimento</b><small>Pix via Mercado Pago · integração preparada</small></div>
-        <button class="btn secondary" id="openPixPayment">Cobrar Pix</button>
+          <div class="send-card">
+            <div><b>Aprovação do cliente</b><small id="budgetApprovalHint">Envie a revisão atual para aprovação.</small></div>
+            <button class="btn primary" id="copyApproval">Enviar / link</button>
+          </div>
+          <button class="btn primary full" id="previewBudgetApproval">Visualizar aprovação do cliente</button>
+
+          <div class="send-card payment-provider-card">
+            <div><b>Recebimento</b><small>Pix via Mercado Pago · integração preparada</small></div>
+            <button class="btn secondary" id="openPixPayment">Cobrar Pix</button>
+          </div>
+
+          <div class="desktop-budget-note">
+            <span>Fluxo</span>
+            <p>O cliente recebe somente itens, total, condição de pagamento e assinatura. Custos internos continuam privados.</p>
+          </div>
+        </aside>
       </div>
     </section>
 
@@ -606,6 +619,6 @@
 
   <div class="toast" id="toast"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./app.js?v=13.0"></script>
+  <script src="./app.js?v=13.1"></script>
 </body>
 </html>
