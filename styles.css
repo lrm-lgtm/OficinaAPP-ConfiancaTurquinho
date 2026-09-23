@@ -2108,3 +2108,208 @@ body.sheet-open .internal-access-gate{
 .send-mode-option b{font-size:10px}
 .send-mode-option small{margin-top:2px;color:#8f999f;font-size:8px;line-height:1.35}
 .send-due-field[hidden]{display:none!important}
+
+
+/* ===== v12.6 practical budget composer ===== */
+.budget-composer-card{
+  max-height:92vh;
+  overflow:auto;
+  padding-bottom:calc(16px + env(safe-area-inset-bottom));
+}
+.budget-composer-summary{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-height:31px;
+  margin:0 0 8px;
+  border:1px solid #30373d;
+  border-radius:10px;
+  background:#101417;
+  color:#c8cfd3;
+  font-size:8.5px;
+  font-weight:900;
+}
+.budget-catalog-search{margin-bottom:7px}
+.budget-catalog-tabs{
+  display:flex;
+  gap:5px;
+  margin-bottom:7px;
+}
+.budget-catalog-tabs button{
+  flex:1;
+  min-height:31px;
+  border:1px solid #30373d;
+  border-radius:9px;
+  background:#15191c;
+  color:#929ca3;
+  font-size:8px;
+  font-weight:900;
+}
+.budget-catalog-tabs button.active{
+  border-color:#e84839;
+  background:#271615;
+  color:#fff;
+}
+.budget-catalog-results{
+  display:grid;
+  gap:5px;
+  max-height:38vh;
+  overflow:auto;
+  padding:1px 1px 4px;
+}
+.catalog-result{
+  border:1px solid #2e353a;
+  border-radius:11px;
+  background:#15191c;
+  overflow:hidden;
+}
+.catalog-result.in-budget{border-color:#3e5949}
+.catalog-result-main{
+  width:100%;
+  display:grid;
+  grid-template-columns:30px minmax(0,1fr) auto 28px;
+  gap:8px;
+  align-items:center;
+  padding:8px;
+  border:0;
+  background:transparent;
+  color:#fff;
+  text-align:left;
+}
+.catalog-kind-icon{
+  display:grid;
+  place-items:center;
+  width:30px;
+  height:30px;
+  border-radius:9px;
+  background:#23292d;
+  font-size:14px;
+}
+.catalog-result-main div{min-width:0}
+.catalog-result-main b,.catalog-result-main small{display:block}
+.catalog-result-main b{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:9.5px;
+}
+.catalog-result-main small{
+  margin-top:2px;
+  color:#778188;
+  font-size:7px;
+}
+.catalog-result-main strong{
+  font-size:9.5px;
+  white-space:nowrap;
+}
+.catalog-add-mark{
+  display:grid;
+  place-items:center;
+  width:27px;
+  height:27px;
+  border-radius:8px;
+  background:#e93d30;
+  color:#fff;
+  font-size:15px;
+  font-weight:900;
+}
+.catalog-result-main:disabled{opacity:.55}
+.catalog-in-budget{
+  display:block;
+  padding:0 8px 6px 46px;
+  color:#7eb595;
+  font-size:7px;
+}
+.catalog-empty{
+  display:grid;
+  place-items:center;
+  min-height:92px;
+  padding:14px;
+  border:1px dashed #31383d;
+  border-radius:11px;
+  color:#7d878d;
+  text-align:center;
+  font-size:8px;
+}
+.catalog-empty b,.catalog-empty span{display:block}
+.catalog-empty b{color:#bdc5ca;font-size:10px}
+.catalog-empty span{margin-top:3px;line-height:1.35}
+.budget-manual-entry{
+  margin-top:8px;
+  border:1px solid #30373d;
+  border-radius:11px;
+  background:#121619;
+  overflow:hidden;
+}
+.budget-manual-entry summary{
+  padding:10px 11px;
+  color:#cfd5d8;
+  cursor:pointer;
+  font-size:9px;
+  font-weight:900;
+  list-style:none;
+}
+.budget-manual-entry summary::-webkit-details-marker{display:none}
+.budget-manual-entry[open] summary{
+  border-bottom:1px solid #2d3439;
+  color:#fff;
+}
+.budget-manual-form{padding:10px}
+.catalog-save-option{
+  display:flex!important;
+  flex-direction:row!important;
+  align-items:flex-start;
+  gap:8px;
+  padding:7px 0;
+}
+.catalog-save-option input{
+  width:18px!important;
+  min-width:18px;
+  height:18px;
+  margin:0;
+}
+.catalog-save-option span{
+  color:#9ba4aa;
+  font-size:8px;
+  line-height:1.35;
+}
+.budget-composer-done{
+  position:sticky;
+  bottom:0;
+  margin-top:9px;
+  box-shadow:0 -10px 18px rgba(13,16,18,.88);
+}
+.budget-line-copy{min-width:0}
+.budget-qty-controls{
+  display:flex;
+  align-items:center;
+  gap:3px;
+}
+.budget-qty-controls button{
+  width:25px;
+  height:25px;
+  border:1px solid #363e43;
+  border-radius:7px;
+  background:#20262a;
+  color:#fff;
+  font-size:12px;
+}
+.budget-qty-controls span{
+  min-width:22px;
+  text-align:center;
+  color:#c8cfd3;
+  font-size:8px;
+  font-weight:900;
+}
+.dynamic-budget-line{
+  gap:8px;
+}
+.dynamic-budget-line .budget-line-value{
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+@media(max-width:430px){
+  .budget-catalog-results{max-height:34vh}
+  .catalog-result-main{grid-template-columns:28px minmax(0,1fr) auto 27px;padding:7px}
+  .budget-line-value strong{width:100%;text-align:right}
+}
