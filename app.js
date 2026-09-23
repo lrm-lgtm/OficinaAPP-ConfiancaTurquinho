@@ -1718,7 +1718,7 @@ async function loadPublicBudgetFromServer(){
     const vehicleText=[v.make,v.model,v.version].filter(Boolean).join(" ")||"Veículo";
     const plate=v.plate||"SEM PLACA";
 
-    if(meta) meta.textContent="ORÇAMENTO #"+String(order.number||"—").padStart(6,"0")+" · REVISÃO "+payload.budget.revision;
+    if(meta) meta.textContent="FATURA / ORÇAMENTO #"+String(order.number||"—").padStart(6,"0")+" · REVISÃO "+payload.budget.revision;
     if(vehicle) vehicle.textContent=vehicleText+" · "+plate;
     if(total) total.textContent=moneyBR(payload.budget.total);
     renderPublicInvoiceTerms(payload.budget,payload.approval,payload.payment_request);
