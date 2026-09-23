@@ -7,7 +7,7 @@
   <meta name="description" content="Auto Mecânica Confiança — gestão de oficina">
   <title>Auto Mecânica Confiança</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=13.1">
+  <link rel="stylesheet" href="./styles.css?v=13.2">
 </head>
 <body>
   <header class="appbar">
@@ -300,33 +300,17 @@
       </div>
     </section>
 
-    <section class="view" data-view="mechanic">
-      <div class="page-title"><div><span>Área técnica</span><h1>Minhas OS</h1></div><span class="status service">sem valores</span></div>
-      <div class="mechanic-tabs"><button class="active">Minhas OS</button><button>Em andamento</button></div>
-      <article class="mechanic-card">
-        <div class="mechanic-top"><div><span>#000121</span><h2>Suspensão dianteira</h2><small>Onix · ABC1D23</small></div><span class="status service">Em execução</span></div>
-        <div class="task-list">
-          <label class="task done"><input type="checkbox" checked> Inspecionar suspensão dianteira</label>
-          <label class="task"><input type="checkbox"> Substituir barra estabilizadora</label>
-          <label class="task"><input type="checkbox"> Substituir terminal de direção</label>
-          <label class="task"><input type="checkbox"> Teste de rodagem</label>
-        </div>
-        <label class="floating-label">Relato técnico<textarea rows="4" placeholder="O que foi encontrado / executado"></textarea></label>
-        <button class="btn primary full" id="finishService">Concluir serviço</button>
-      </article>
-      <article class="mechanic-card dim">
-        <div class="mechanic-top"><div><span>#000119</span><h2>Troca de óleo</h2><small>HB20 · XY29A12</small></div><span class="status waiting">Aguardando</span></div>
-      </article>
+    <section class="view desktop-workspace" data-view="mechanic">
+      <div class="page-title"><div><span>Área técnica</span><h1>Execução da oficina</h1></div><span class="status service">sem valores</span></div>
+      <div class="mechanic-tabs"><button class="active" data-mechanic-filter="active">Em andamento</button><button data-mechanic-filter="waiting">Aguardando</button><button data-mechanic-filter="all">Todas</button></div>
+      <div class="mechanic-real-list" id="mechanicList"><div class="search-empty">Carregando OS…</div></div>
     </section>
 
-    <section class="view" data-view="stock">
-      <div class="page-title"><div><span>Peças</span><h1>Estoque</h1></div><button class="btn primary compact">＋ Entrada</button></div>
-      <label class="search"><span>⌕</span><input placeholder="Buscar produto"></label>
-      <div class="stack">
-        <article class="stock-card"><div><b>Pastilha Freio Corolla</b><small>PF-COR-01 · reservado: 2</small></div><strong>8 <small>un</small></strong></article>
-        <article class="stock-card low"><div><b>Fluido DOT 4 500 ml</b><small>FD4-500 · reservado: 1</small></div><strong>3 <small>un</small></strong></article>
-        <article class="stock-card"><div><b>Filtro óleo Toyota</b><small>FO-TYO-02 · reservado: 0</small></div><strong>12 <small>un</small></strong></article>
-      </div>
+    <section class="view desktop-workspace" data-view="stock">
+      <div class="page-title"><div><span>Peças e serviços</span><h1>Estoque / catálogo</h1></div><span class="status open">dados reais</span></div>
+      <label class="search"><span>⌕</span><input id="stockSearch" placeholder="Buscar peça, serviço ou código"></label>
+      <div class="stock-summary" id="stockSummary"></div>
+      <div class="stack stock-real-list" id="stockList"><div class="search-empty">Carregando catálogo…</div></div>
     </section>
 
     <section class="view internal-only desktop-workspace" data-view="finance">
@@ -619,6 +603,6 @@
 
   <div class="toast" id="toast"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./app.js?v=13.1"></script>
+  <script src="./app.js?v=13.2"></script>
 </body>
 </html>
