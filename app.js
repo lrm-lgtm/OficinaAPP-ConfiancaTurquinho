@@ -202,6 +202,8 @@ let previousView="dashboard";
 let currentFilter="all";
 let currentKanbanStage="today";
 let currentKanbanHealth="";
+let currentMechanicFilter="active";
+let stockCatalog=[];
 let wizardStep=1;
 let requiredPhotos=new Set();
 let deferredPrompt=null;
@@ -232,6 +234,8 @@ function go(name){
   if(name==="orders") renderOrders();
   if(name==="clients") renderClients();
   if(name==="finance") renderFinance();
+  if(name==="mechanic") renderMechanic();
+  if(name==="stock") renderStock();
   if(name==="budget") renderBudget();
   if(name==="new-os") setWizardStep(1);
   if(name==="client-approval"){
@@ -358,6 +362,8 @@ async function syncServerData({quiet=false}={}){
     renderDashboard();
     renderOrders();
     renderClients();
+    if(currentView==="mechanic") renderMechanic();
+    if(currentView==="stock") renderStock();
     if(!quiet) toast("Dados sincronizados com o servidor.");
     return true;
   }catch(error){
@@ -964,6 +970,84 @@ document.querySelectorAll("[data-filter-jump]").forEach(btn=>btn.addEventListene
   document.querySelectorAll("[data-filter]").forEach(x=>x.classList.toggle("active",x.dataset.filter===currentFilter));
   go("orders");
 }));
+
+function mechanicFilterMatch(o){
+  const stage=kanbanStage(o);
+  if(currentMechanicFilter==="all") return ["service","waiting_parts","waiting_customer","entry","budget"].includes(stage);
+  if(currentMechanicFilter==="waiting") return ["waiting_parts","waiting_customer"].includes(stage)||["blocked"].includes(kanbanHealth(o));
+  return stage==="service";
+}
+function mechanicRealCard(o){
+  const health=healthInfo(o);
+  const timing=healthTimingLabel(o);
+  return '<article class="mechanic-real-card">'+
+    '<button class="mechanic-real-main" data-open-os="'+o.id+'">'+
+      '<div class="mechanic-real-id"><b>'+escapeHtml(o.plate)+'</b><span>'+escapeHtml(o.ref)+'</span></div>'+
+      '<div class="mechanic-real-copy"><b>'+escapeHtml(o.vehicle)+'</b><small>'+escapeHtml(o.complaint||"Sem relato")+'</small><span>'+escapeHtml(o.stage)+'</span></div>'+
+      '<span class="health-badge '+health.cls+'"><i>'+health.icon+'</i><span>'+health.label+(timing?'<small>'+escapeHtml(timing)+'</small>':'')+'</span></span>'+
+    '</button>'+
+    '<button class="mechanic-real-update" data-quick-os="'+o.id+'">Atualizar</button>'+
+  '</article>';
+}
+function renderMechanic(){
+  const target=document.getElementById("mechanicList");
+  if(!target) return;
+  const list=allOrders().filter(mechanicFilterMatch).sort((a,b)=>priorityRank(a)-priorityRank(b));
+  target.innerHTML=list.length?list.map(mechanicRealCard).join(""):'<div class="search-empty">Nenhuma OS neste filtro.</div>';
+  bindOrderOpeners();
+}
+document.querySelectorAll("[data-mechanic-filter]").forEach(btn=>btn.addEventListener("click",()=>{
+  currentMechanicFilter=btn.dataset.mechanicFilter;
+  document.querySelectorAll("[data-mechanic-filter]").forEach(x=>x.classList.toggle("active",x===btn));
+  renderMechanic();
+}));
+
+async function renderStock(){
+  const target=document.getElementById("stockList");
+  const summary=document.getElementById("stockSummary");
+  if(!target) return;
+  if(!(staffProfile?.active&&supabaseClient)){
+    target.innerHTML='<div class="search-empty">Entre para consultar dados reais.</div>';
+    return;
+  }
+  target.innerHTML='<div class="search-empty">Carregando catálogo…</div>';
+  const {data,error}=await supabaseClient.from("catalog_items")
+    .select("id,kind,name,sku,unit,sale_price,cost_price,track_stock,stock_qty,favorite,usage_count,last_used_at")
+    .eq("active",true)
+    .order("track_stock",{ascending:false})
+    .order("name",{ascending:true});
+  if(error){
+    target.innerHTML='<div class="search-empty">Não foi possível carregar o catálogo.</div>';
+    return;
+  }
+  stockCatalog=data||[];
+  renderStockRows();
+  if(summary){
+    const tracked=stockCatalog.filter(x=>x.track_stock);
+    const low=tracked.filter(x=>Number(x.stock_qty||0)<=2);
+    summary.innerHTML=
+      '<article><span>Catálogo</span><b>'+stockCatalog.length+'</b><small>itens ativos</small></article>'+
+      '<article><span>Controlados</span><b>'+tracked.length+'</b><small>com saldo</small></article>'+
+      '<article><span>Baixo saldo</span><b>'+low.length+'</b><small>≤ 2 unidades</small></article>';
+  }
+}
+function renderStockRows(){
+  const target=document.getElementById("stockList");
+  if(!target) return;
+  const q=(document.getElementById("stockSearch")?.value||"").trim().toLowerCase();
+  const list=stockCatalog.filter(x=>!q||[x.name,x.sku||"",budgetKindText(x.kind)].join(" ").toLowerCase().includes(q));
+  target.innerHTML=list.length?list.map(item=>{
+    const tracked=item.track_stock;
+    const qty=Number(item.stock_qty||0);
+    return '<article class="stock-real-row '+(tracked&&qty<=2?"low":"")+'">'+
+      '<div class="stock-real-kind">'+(item.kind==="service"?"🔧":"▦")+'</div>'+
+      '<div class="stock-real-copy"><b>'+escapeHtml(item.name)+'</b><small>'+escapeHtml(item.sku||budgetKindText(item.kind))+' · '+escapeHtml(item.unit||"un")+'</small></div>'+
+      '<div class="stock-real-price"><span>Venda</span><b>'+moneyBR(item.sale_price)+'</b></div>'+
+      '<div class="stock-real-qty"><span>'+ (tracked?"Saldo":"Controle") +'</span><b>'+(tracked?qty.toLocaleString("pt-BR")+" "+escapeHtml(item.unit||"un"):"não controlado")+'</b></div>'+
+    '</article>';
+  }).join(""):'<div class="search-empty">Nenhum item encontrado.</div>';
+}
+document.getElementById("stockSearch")?.addEventListener("input",renderStockRows);
 
 function desktopClientRow(c){
   return '<article class="desktop-client-row" data-client-id="'+c.id+'">'+
