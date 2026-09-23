@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
 
     const { data: budget, error: budgetError } = await supabase
       .from("budget_revisions")
-      .select("id, revision, status, total, work_order_id")
+      .select("id, revision, status, total, payment_mode, payment_due_at, payment_note, work_order_id")
       .eq("id", tokenRow.budget_revision_id)
       .single();
 
@@ -135,6 +135,7 @@ Deno.serve(async (req) => {
             amount: Number(budget.total || 0),
             paid_amount: 0,
             status: "open",
+            due_at: budget.payment_due_at || (budget.payment_mode === "pay_now" ? new Date().toISOString() : null),
           })
           .select("id")
           .single();
@@ -147,7 +148,14 @@ Deno.serve(async (req) => {
       work_order_id: budget.work_order_id,
       actor_type: "customer",
       event_type: decision === "approved" ? "budget_approved" : "budget_revision_requested",
-      payload: { budget_revision_id: budget.id, revision: budget.revision, total: budget.total, signature_sha256: signatureSha256 },
+      payload: {
+        budget_revision_id: budget.id,
+        revision: budget.revision,
+        total: budget.total,
+        payment_mode: budget.payment_mode || "pay_now",
+        payment_due_at: budget.payment_due_at || null,
+        signature_sha256: signatureSha256
+      },
     });
 
     return Response.json({
