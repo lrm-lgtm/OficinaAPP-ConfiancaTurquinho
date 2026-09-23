@@ -1243,6 +1243,8 @@ function openDetail(id){
 // ---- v12.0 functional budget revisions ----
 const budgetItemSheet=document.getElementById("budgetItemSheet");
 const budgetItemForm=document.getElementById("budgetItemForm");
+let budgetCatalog=[];
+let budgetCatalogFilter="all";
 
 function localBudgetStore(){
   try{return JSON.parse(localStorage.getItem("oficina-budgets")||"{}")}catch{return {}}
@@ -1323,15 +1325,16 @@ function renderBudgetState(order){
     lines.innerHTML=currentBudgetItems.length
       ? currentBudgetItems.map(item=>
         '<div class="budget-line dynamic-budget-line" data-budget-item="'+item.id+'">'+
-          '<div><b>'+escapeHtml(item.description)+'</b><small>'+budgetKindText(item.kind)+' · '+Number(item.quantity||1).toLocaleString("pt-BR")+' × '+moneyBR(item.unit_price)+'</small></div>'+
+          '<div class="budget-line-copy"><b>'+escapeHtml(item.description)+'</b><small>'+budgetKindText(item.kind)+' · '+moneyBR(item.unit_price)+' / un</small></div>'+
           '<div class="budget-line-value"><strong>'+moneyBR(item.line_total??Number(item.quantity||1)*Number(item.unit_price||0))+'</strong>'+
-          (budgetEditable()?'<button type="button" class="budget-delete-item" data-delete-budget-item="'+item.id+'" aria-label="Remover item">×</button>':'')+
+          (budgetEditable()?'<div class="budget-qty-controls"><button type="button" data-budget-qty="'+item.id+'" data-delta="-1">−</button><span>'+Number(item.quantity||1).toLocaleString("pt-BR")+'</span><button type="button" data-budget-qty="'+item.id+'" data-delta="1">＋</button></div><button type="button" class="budget-delete-item" data-delete-budget-item="'+item.id+'" aria-label="Remover item">×</button>':'<small>'+Number(item.quantity||1).toLocaleString("pt-BR")+' un</small>')+
           '</div>'+
         '</div>'
       ).join("")
       : '<div class="budget-empty"><b>Orçamento vazio</b><span>Adicione peças e serviços para começar.</span></div>';
 
     lines.querySelectorAll("[data-delete-budget-item]").forEach(btn=>btn.addEventListener("click",()=>deleteBudgetItem(btn.dataset.deleteBudgetItem)));
+    lines.querySelectorAll("[data-budget-qty]").forEach(btn=>btn.addEventListener("click",()=>changeBudgetItemQuantity(btn.dataset.budgetQty,Number(btn.dataset.delta))));
   }
 }
 async function loadServerBudget(order){
@@ -1356,7 +1359,7 @@ async function loadServerBudget(order){
   }
   const {data:items,error:itemsError}=await supabaseClient
     .from("budget_items")
-    .select("id,budget_revision_id,kind,description,quantity,unit_price,line_total,sort_order")
+    .select("id,budget_revision_id,catalog_item_id,kind,description,quantity,unit_price,line_total,sort_order")
     .eq("budget_revision_id",latest.id)
     .order("sort_order",{ascending:true});
   if(itemsError) throw itemsError;
@@ -1481,6 +1484,157 @@ async function createEditableRevision(){
   await loadLocalBudget(order);
   return currentBudgetRevision;
 }
+async function loadBudgetCatalog(){
+  if(staffProfile?.active && supabaseClient){
+    const {data,error}=await supabaseClient
+      .from("catalog_items")
+      .select("id,kind,name,sku,unit,sale_price,cost_price,track_stock,stock_qty,favorite,usage_count,last_used_at")
+      .eq("active",true)
+      .order("favorite",{ascending:false})
+      .order("usage_count",{ascending:false})
+      .order("last_used_at",{ascending:false,nullsFirst:false});
+    if(error) throw error;
+    budgetCatalog=data||[];
+  }else{
+    budgetCatalog=currentBudgetItems.map((item,index)=>({
+      id:"demo-"+index,
+      kind:item.kind,
+      name:item.description,
+      sku:null,
+      unit:"un",
+      sale_price:Number(item.unit_price||0),
+      usage_count:1,
+      last_used_at:null
+    }));
+  }
+  renderBudgetCatalog();
+}
+function budgetCatalogMeta(item){
+  const bits=[];
+  if(item.sku) bits.push(item.sku);
+  bits.push(budgetKindText(item.kind));
+  if(item.track_stock) bits.push("estoque "+Number(item.stock_qty||0).toLocaleString("pt-BR")+" "+(item.unit||"un"));
+  else bits.push(item.unit||"un");
+  return bits.join(" · ");
+}
+function updateBudgetComposerSummary(){
+  const el=document.getElementById("budgetComposerSummary");
+  if(!el) return;
+  el.textContent=currentBudgetItems.length+" "+(currentBudgetItems.length===1?"item":"itens")+" · "+moneyBR(currentBudgetRevision?.total||0);
+}
+function renderBudgetCatalog(){
+  const results=document.getElementById("budgetCatalogResults");
+  if(!results) return;
+  const query=(document.getElementById("budgetCatalogSearch")?.value||"").trim().toLowerCase();
+  const list=budgetCatalog.filter(item=>{
+    const typeOk=budgetCatalogFilter==="all"||item.kind===budgetCatalogFilter;
+    const qOk=!query||[item.name,item.sku||"",budgetKindText(item.kind)].join(" ").toLowerCase().includes(query);
+    return typeOk&&qOk;
+  }).slice(0,40);
+
+  results.innerHTML=list.length?list.map(item=>{
+    const inBudget=currentBudgetItems.find(line=>String(line.catalog_item_id||"")===String(item.id));
+    return '<article class="catalog-result '+(inBudget?"in-budget":"")+'">'+
+      '<button type="button" class="catalog-result-main" data-catalog-add="'+item.id+'">'+
+        '<span class="catalog-kind-icon">'+(item.kind==="service"?"🔧":item.kind==="part"?"▦":"＋")+'</span>'+
+        '<div><b>'+escapeHtml(item.name)+'</b><small>'+escapeHtml(budgetCatalogMeta(item))+'</small></div>'+
+        '<strong>'+moneyBR(item.sale_price)+'</strong>'+
+        '<span class="catalog-add-mark">'+(inBudget?"＋":"＋")+'</span>'+
+      '</button>'+
+      (inBudget?'<small class="catalog-in-budget">No orçamento: '+Number(inBudget.quantity||1).toLocaleString("pt-BR")+'</small>':'')+
+    '</article>';
+  }).join(""):'<div class="catalog-empty"><b>Nenhum item encontrado</b><span>Use “Item que não está no catálogo” abaixo. Depois ele fica salvo para a próxima vez.</span></div>';
+
+  results.querySelectorAll("[data-catalog-add]").forEach(btn=>btn.addEventListener("click",async()=>{
+    const item=budgetCatalog.find(x=>String(x.id)===String(btn.dataset.catalogAdd));
+    if(!item) return;
+    btn.disabled=true;
+    try{
+      const fd=new FormData();
+      fd.set("description",item.name);
+      fd.set("kind",item.kind);
+      fd.set("quantity","1");
+      fd.set("unit_price",String(item.sale_price||0));
+      fd.set("catalog_item_id",String(item.id));
+      await addBudgetItem(fd);
+      updateBudgetComposerSummary();
+      renderBudgetCatalog();
+    }catch{
+      toast("Não foi possível adicionar o item.");
+    }finally{
+      btn.disabled=false;
+    }
+  }));
+}
+async function ensureCatalogItem(fd){
+  if(!(staffProfile?.active&&supabaseClient)) return null;
+  const kind=String(fd.get("kind")||"other");
+  const name=String(fd.get("description")||"").trim();
+  const salePrice=parseMoneyInput(fd.get("unit_price"));
+  if(!name) return null;
+
+  const {data:existing}=await supabaseClient
+    .from("catalog_items")
+    .select("id,kind,name,sale_price")
+    .eq("kind",kind)
+    .ilike("name",name)
+    .limit(1)
+    .maybeSingle();
+
+  if(existing){
+    const {data,error}=await supabaseClient.from("catalog_items").update({
+      sale_price:salePrice,
+      updated_at:new Date().toISOString()
+    }).eq("id",existing.id).select("id,kind,name,sale_price").single();
+    if(error) throw error;
+    return data;
+  }
+
+  const {data,error}=await supabaseClient.from("catalog_items").insert({
+    kind,
+    name,
+    sale_price:salePrice,
+    unit:"un",
+    created_by:staffSession?.user?.id||null
+  }).select("id,kind,name,sale_price").single();
+  if(error) throw error;
+  return data;
+}
+async function touchCatalogItem(catalogItemId){
+  if(!(catalogItemId&&staffProfile?.active&&supabaseClient)) return;
+  const item=budgetCatalog.find(x=>String(x.id)===String(catalogItemId));
+  await supabaseClient.from("catalog_items").update({
+    usage_count:Number(item?.usage_count||0)+1,
+    last_used_at:new Date().toISOString(),
+    updated_at:new Date().toISOString()
+  }).eq("id",catalogItemId);
+}
+async function changeBudgetItemQuantity(itemId,delta){
+  if(!budgetEditable()) return;
+  const order=allOrders().find(o=>String(o.id)===String(selectedBudgetOrderId));
+  const item=currentBudgetItems.find(x=>String(x.id)===String(itemId));
+  if(!order||!item) return;
+  const next=Math.max(0,Number(item.quantity||1)+Number(delta||0));
+  if(next<=0){await deleteBudgetItem(itemId);return}
+
+  if(order.server&&staffProfile?.active&&supabaseClient){
+    const {error}=await supabaseClient.from("budget_items").update({quantity:next}).eq("id",itemId).eq("budget_revision_id",currentBudgetRevision.id);
+    if(error){toast("Não foi possível alterar a quantidade.");return}
+    await recalcServerBudget(currentBudgetRevision.id);
+    await loadServerBudget(order);
+  }else{
+    const store=localBudgetStore();const key=String(order.id);const current=store[key]||seedLocalBudget(order);
+    const line=(current.items||[]).find(x=>String(x.id)===String(itemId));
+    if(line){line.quantity=next;line.line_total=Math.round(next*Number(line.unit_price||0)*100)/100}
+    const total=(current.items||[]).reduce((sum,x)=>sum+Number(x.line_total||0),0);
+    current.revision.subtotal=total;current.revision.total=total;store[key]=current;saveLocalBudgetStore(store);
+    await loadLocalBudget(order);
+  }
+  renderBudgetState(order);
+  updateBudgetComposerSummary();
+  renderBudgetCatalog();
+}
+
 async function addBudgetItem(fd){
   const order=allOrders().find(o=>String(o.id)===String(selectedBudgetOrderId));
   if(!order) return;
@@ -1490,18 +1644,30 @@ async function addBudgetItem(fd){
   const kind=String(fd.get("kind")||"other");
   const quantity=parseMoneyInput(fd.get("quantity"))||1;
   const unitPrice=parseMoneyInput(fd.get("unit_price"));
+  const catalogItemId=String(fd.get("catalog_item_id")||"").trim()||null;
   if(!description||unitPrice<0){toast("Confira descrição e valor.");return}
 
   if(order.server && staffProfile?.active && supabaseClient){
-    const {error}=await supabaseClient.from("budget_items").insert({
-      budget_revision_id:currentBudgetRevision.id,
-      kind,
-      description,
-      quantity,
-      unit_price:unitPrice,
-      sort_order:currentBudgetItems.length+1
-    });
-    if(error) throw error;
+    const existing=catalogItemId?currentBudgetItems.find(x=>String(x.catalog_item_id||"")===String(catalogItemId)):null;
+    if(existing){
+      const {error}=await supabaseClient.from("budget_items").update({
+        quantity:Number(existing.quantity||1)+quantity,
+        unit_price:unitPrice
+      }).eq("id",existing.id).eq("budget_revision_id",currentBudgetRevision.id);
+      if(error) throw error;
+    }else{
+      const {error}=await supabaseClient.from("budget_items").insert({
+        budget_revision_id:currentBudgetRevision.id,
+        catalog_item_id:catalogItemId,
+        kind,
+        description,
+        quantity,
+        unit_price:unitPrice,
+        sort_order:currentBudgetItems.length+1
+      });
+      if(error) throw error;
+    }
+    await touchCatalogItem(catalogItemId);
     await recalcServerBudget(currentBudgetRevision.id);
     await loadServerBudget(order);
   }else{
@@ -1540,6 +1706,8 @@ async function deleteBudgetItem(itemId){
     await loadLocalBudget(order);
   }
   renderBudgetState(order);
+  updateBudgetComposerSummary();
+  renderBudgetCatalog();
 }
 async function sendBudgetForApproval(paymentMode=currentBudgetRevision?.payment_mode||"pay_now",paymentDueAt=null){
   const order=allOrders().find(o=>String(o.id)===String(selectedBudgetOrderId));
@@ -1621,10 +1789,23 @@ document.getElementById("addBudgetItem").addEventListener("click",async()=>{
     try{await createEditableRevision();renderBudgetState(allOrders().find(o=>String(o.id)===String(selectedBudgetOrderId)));toast("Nova revisão criada para edição.");}
     catch{toast("Não foi possível criar nova revisão.");return}
   }
+  budgetCatalogFilter="all";
+  document.querySelectorAll("[data-catalog-filter]").forEach(btn=>btn.classList.toggle("active",btn.dataset.catalogFilter==="all"));
+  const search=document.getElementById("budgetCatalogSearch");
+  if(search) search.value="";
   budgetItemForm.reset();
   budgetItemForm.elements.quantity.value="1";
+  budgetItemForm.elements.save_catalog.checked=true;
+  document.getElementById("budgetManualEntry").open=false;
   document.getElementById("budgetItemPreview").textContent="Total do item: R$ 0,00";
+  updateBudgetComposerSummary();
   openSheet(budgetItemSheet);
+  try{
+    await loadBudgetCatalog();
+    setTimeout(()=>search?.focus(),80);
+  }catch{
+    document.getElementById("budgetCatalogResults").innerHTML='<div class="catalog-empty"><b>Catálogo indisponível</b><span>Você ainda pode adicionar um item avulso abaixo.</span></div>';
+  }
 });
 document.getElementById("newBudgetRevision").addEventListener("click",async()=>{
   try{
@@ -1643,10 +1824,32 @@ budgetItemForm?.addEventListener("submit",async event=>{
   event.preventDefault();
   const btn=document.getElementById("saveBudgetItem");btn.disabled=true;
   try{
-    await addBudgetItem(new FormData(budgetItemForm));
-    closeSheets();toast("Item adicionado ao orçamento.");
+    const fd=new FormData(budgetItemForm);
+    if(fd.get("save_catalog")){
+      const catalogItem=await ensureCatalogItem(fd);
+      if(catalogItem) fd.set("catalog_item_id",catalogItem.id);
+    }
+    await addBudgetItem(fd);
+    budgetItemForm.reset();
+    budgetItemForm.elements.quantity.value="1";
+    budgetItemForm.elements.save_catalog.checked=true;
+    document.getElementById("budgetItemPreview").textContent="Total do item: R$ 0,00";
+    document.getElementById("budgetManualEntry").open=false;
+    await loadBudgetCatalog();
+    updateBudgetComposerSummary();
+    toast("Item adicionado. Você pode incluir outro.");
   }catch{toast("Não foi possível adicionar o item.");}
   finally{btn.disabled=false}
+});
+document.getElementById("budgetCatalogSearch")?.addEventListener("input",renderBudgetCatalog);
+document.querySelectorAll("[data-catalog-filter]").forEach(btn=>btn.addEventListener("click",()=>{
+  budgetCatalogFilter=btn.dataset.catalogFilter;
+  document.querySelectorAll("[data-catalog-filter]").forEach(x=>x.classList.toggle("active",x===btn));
+  renderBudgetCatalog();
+}));
+document.getElementById("budgetComposerDone")?.addEventListener("click",()=>{
+  closeSheets();
+  renderBudgetState(allOrders().find(o=>String(o.id)===String(selectedBudgetOrderId)));
 });
 const budgetSendSheet=document.getElementById("budgetSendSheet");
 function syncBudgetSendMode(){
