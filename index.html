@@ -7,7 +7,7 @@
   <meta name="description" content="Auto Mecânica Confiança — gestão de oficina">
   <title>Auto Mecânica Confiança</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=12.4.2">
+  <link rel="stylesheet" href="./styles.css?v=12.5">
 </head>
 <body>
   <header class="appbar">
@@ -222,6 +222,11 @@
         <div><span>Carregando itens…</span><b>—</b></div>
       </div>
 
+      <div class="invoice-payment-mode" id="invoicePaymentMode">
+        <div><span>Condição de pagamento</span><b id="invoicePaymentModeTitle">Carregando…</b></div>
+        <small id="invoicePaymentModeText">—</small>
+      </div>
+
       <div class="approval-sign-card">
         <label class="floating-label compact-name">Nome do cliente<input id="approvalName" value="João da Silva" autocomplete="name"></label>
 
@@ -241,6 +246,15 @@
       </div>
 
       <div class="decision-result" id="decisionResult"></div>
+
+      <div class="public-payment-panel" id="publicPaymentPanel" hidden>
+        <div class="public-payment-head">
+          <div><span>Pagamento</span><b id="publicPaymentTitle">Pagamento pendente</b></div>
+          <strong id="publicPaymentAmount">—</strong>
+        </div>
+        <p id="publicPaymentText">Após a aprovação, a cobrança ficará disponível nesta mesma fatura.</p>
+        <div class="public-payment-status" id="publicPaymentStatus">Aguardando aprovação do orçamento.</div>
+      </div>
 
       <div id="approvalActions" class="approval-actionbar">
         <button class="btn outline-danger" id="rejectBudget">Solicitar revisão</button>
@@ -347,6 +361,38 @@
       <h2>Busca rápida</h2>
       <label class="search global-search"><span>⌕</span><input id="globalSearchInput" placeholder="Placa, cliente, OS ou veículo"></label>
       <div class="compact-order-list" id="globalSearchResults"></div>
+    </div>
+  </div>
+
+  <div class="sheet" id="budgetSendSheet" hidden>
+    <button class="sheet-backdrop" data-close-sheet aria-label="Fechar"></button>
+    <div class="sheet-card budget-send-sheet-card">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title-row">
+        <div><small>Enviar ao cliente</small><h2>Aprovação e cobrança</h2></div>
+        <span class="private-badge">R<span style="font-size:.9em">$</span></span>
+      </div>
+
+      <div class="send-mode-options">
+        <label class="send-mode-option active" data-send-mode-card="pay_now">
+          <input type="radio" name="budgetPaymentMode" value="pay_now" checked>
+          <span class="send-mode-icon">⚡</span>
+          <div><b>Cobrar agora</b><small>Cliente aprova e a mesma tela continua como cobrança/fatura.</small></div>
+        </label>
+        <label class="send-mode-option" data-send-mode-card="credit">
+          <input type="radio" name="budgetPaymentMode" value="credit">
+          <span class="send-mode-icon">🧾</span>
+          <div><b>Crediário / pagar depois</b><small>Cliente apenas aprova e assina. O valor fica em aberto no financeiro.</small></div>
+        </label>
+      </div>
+
+      <label class="floating-label send-due-field" id="budgetDueField" hidden>
+        Vencimento combinado
+        <input type="date" id="budgetPaymentDueDate">
+      </label>
+
+      <div class="provider-status" id="budgetSendHint">O modo escolhido fica vinculado a esta revisão.</div>
+      <button class="btn primary full" type="button" id="confirmBudgetSend">Gerar link para o cliente</button>
     </div>
   </div>
 
@@ -511,6 +557,6 @@
 
   <div class="toast" id="toast"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./app.js?v=12.4.2"></script>
+  <script src="./app.js?v=12.5"></script>
 </body>
 </html>
