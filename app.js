@@ -21,6 +21,7 @@ const V11_PUBLIC_BUDGET_ENDPOINT=V11_SUPABASE_URL+"/functions/v1/public-budget";
 const V11_APPROVE_BUDGET_ENDPOINT=V11_SUPABASE_URL+"/functions/v1/approve-budget";
 const V11_CREATE_PIX_ENDPOINT=V11_SUPABASE_URL+"/functions/v1/create-mercadopago-pix";
 const V11_PUBLIC_PAYMENT_ENDPOINT=V11_SUPABASE_URL+"/functions/v1/public-payment";
+const V11_MP_ADJUST_ENDPOINT=V11_SUPABASE_URL+"/functions/v1/mercadopago-payment-adjustment";
 const V11_PILOT_APPROVAL_TOKEN="59de1bbc-cf56-4579-a72b-a8f8e46cfe9d";
 const V11_SUPABASE_PUBLISHABLE_KEY="sb_publishable_MxXw0bpUQ0RIXkhwFsILHw_TteIueoe";
 const supabaseClient=window.supabase?.createClient
@@ -690,7 +691,10 @@ function historyLabel(eventType){
     reserved_part_consumed:"Peça instalada",
     reserved_part_released:"Reserva de peça liberada",
     work_order_delivered:"Veículo entregue",
-    work_order_cancelled:"OS cancelada"
+    work_order_cancelled:"OS cancelada",
+    cancellation_stock_resolved:"Acerto de estoque",
+    cancellation_payment_resolved:"Acerto financeiro",
+    cancellation_provider_payment_cancelled:"Cobrança Pix cancelada"
   })[eventType]||"Atualização da OS";
 }
 function historyDetail(row){
@@ -715,6 +719,15 @@ function historyDetail(row){
   if(row.event_type==="reserved_part_released") return Number(p.quantity||0).toLocaleString("pt-BR")+" unidade(s)";
   if(row.event_type==="work_order_delivered") return (p.final_km?"Saída: "+Number(p.final_km).toLocaleString("pt-BR")+" km · ":"")+"vistoria de saída concluída.";
   if(row.event_type==="work_order_cancelled") return String(p.reason||"Cancelamento registrado.")+(Number(p.released_quantity||0)>0?" · reserva liberada: "+Number(p.released_quantity).toLocaleString("pt-BR"):"");
+  if(row.event_type==="cancellation_stock_resolved"){
+    const action={return_to_stock:"retorno ao estoque",write_off:"perda/inutilizada",keep_installed:"mantida no veículo"}[p.action]||p.action;
+    return Number(p.quantity||0).toLocaleString("pt-BR")+" unidade(s) · "+action;
+  }
+  if(row.event_type==="cancellation_payment_resolved"){
+    const action={refund:"estorno",credit_customer:"crédito ao cliente",keep_charged:"valor mantido"}[p.action]||p.action;
+    return moneyBR(p.amount||0)+" · "+action;
+  }
+  if(row.event_type==="cancellation_provider_payment_cancelled") return "Cobrança eletrônica cancelada antes do encerramento da OS.";
   return p.inspection?"Vistoria de entrada registrada.":"";
 }
 async function loadOrderHistory(order){
