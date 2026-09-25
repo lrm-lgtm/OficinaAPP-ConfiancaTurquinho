@@ -340,7 +340,7 @@ function go(name){
   queueScrollLock();
 }
 
-document.querySelectorAll("[data-go]").forEach(btn=>btn.addEventListener("click",()=>go(btn.dataset.go)));
+document.querySelectorAll("[data-go]").forEach(btn=>btn.addEventListener("click",()=>{if(btn.dataset.go==="new-os") resetWizard();go(btn.dataset.go)}));
 appBack.addEventListener("click",()=>go(previousView==="client-approval"?"budget":previousView||"dashboard"));
 
 function statusBadge(status){
@@ -1734,12 +1734,64 @@ async function createOrder(fd,quick){
   return order;
 }
 function resetWizard(){
+  completingQuickOrderId=null;
   wizard.reset();requiredPhotos.clear();
+  document.getElementById("wizardModeLabel").textContent="Nova Ordem de Serviço";
+  document.getElementById("wizardSubmitBtn").textContent="Criar Ordem de Serviço";
+  document.getElementById("wizCustomer").readOnly=false;
+  document.getElementById("pickExistingClient").hidden=false;
+  document.getElementById("quickCreate").hidden=false;
   document.querySelectorAll(".capture-card").forEach(card=>{
     card.classList.remove("captured");
+    const input=card.querySelector("input");
+    if(input){input.disabled=false;input.value=""}
     card.querySelector(".capture-preview").innerHTML='<span>'+(card.classList.contains("optional")?"＋":"📷")+'</span>';
   });
   updatePhotoProgress();setWizardStep(1);
+}
+
+async function loadQuickCompletionPhotos(order){
+  if(!(order?.server&&staffProfile?.active&&supabaseClient)) return;
+  const {data,error}=await supabaseClient
+    .from("inspection_photos")
+    .select("slot")
+    .eq("work_order_id",order.id)
+    .eq("phase","entry")
+    .eq("required",true);
+  if(error) return;
+  const existing=new Set((data||[]).map(row=>row.slot));
+  document.querySelectorAll(".capture-card.required").forEach(card=>{
+    const slot=card.dataset.slot;
+    if(!existing.has(slot)) return;
+    requiredPhotos.add(slot);
+    card.classList.add("captured");
+    const input=card.querySelector("input");
+    if(input) input.disabled=true;
+    card.querySelector(".capture-preview").innerHTML="<span>✓</span>";
+  });
+  updatePhotoProgress();
+}
+
+async function startQuickOrderCompletion(order){
+  resetWizard();
+  completingQuickOrderId=order.id;
+  document.getElementById("wizardModeLabel").textContent="Completar "+order.ref;
+  document.getElementById("wizardSubmitBtn").textContent="Salvar cadastro e vistoria";
+  const customer=document.getElementById("wizCustomer");
+  customer.value=order.customer;
+  customer.readOnly=true;
+  document.getElementById("pickExistingClient").hidden=true;
+  document.getElementById("quickCreate").hidden=true;
+
+  wizard.elements.plate.value=order.plate==="SEM PLACA"?"":order.plate;
+  wizard.elements.vehicle.value=order.vehicle==="Veículo a completar"?"":order.vehicle;
+  wizard.elements.year.value=order.raw?.vehicle_year||"";
+  wizard.elements.km.value=order.raw?.current_km||order.raw?.vehicle_km||"";
+  wizard.elements.complaint.value=order.complaint==="Sem relato inicial"?"":order.complaint;
+
+  go("new-os");
+  setWizardStep(2);
+  await loadQuickCompletionPhotos(order);
 }
 
 function budgetActionLabel(o){
@@ -4137,6 +4189,7 @@ document.getElementById("globalSearchBtn")?.addEventListener("click",()=>{
   setTimeout(()=>document.getElementById("globalSearchInput")?.focus(),80);
 });
 document.querySelectorAll("[data-sheet-go]").forEach(btn=>btn.addEventListener("click",()=>{
+  if(btn.dataset.sheetGo==="new-os") resetWizard();
   closeSheets();go(btn.dataset.sheetGo);
 }));
 document.querySelector("[data-sheet-client]")?.addEventListener("click",()=>{
