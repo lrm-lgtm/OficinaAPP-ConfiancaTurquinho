@@ -530,6 +530,73 @@ async function uploadInspectionPhotos(workOrderId){
     if(error) throw error;
   }
 }
+async function uploadQuickCompletionPhotos(workOrderId){
+  const {data:existingRows,error:existingError}=await supabaseClient
+    .from("inspection_photos")
+    .select("slot,phase")
+    .eq("work_order_id",workOrderId)
+    .eq("phase","entry");
+  if(existingError) throw existingError;
+
+  const existingRequired=new Set((existingRows||[]).map(row=>row.slot));
+  const rows=[];
+  for(const card of document.querySelectorAll(".capture-card")){
+    const input=card.querySelector("input");
+    const file=input?.files?.[0];
+    if(!file) continue;
+
+    const slot=card.dataset.slot||"other";
+    if(card.classList.contains("required") && existingRequired.has(slot)) continue;
+
+    const ext=(file.name.split(".").pop()||"jpg").toLowerCase().replace(/[^a-z0-9]/g,"")||"jpg";
+    const storagePath=workOrderId+"/entry/"+slot+"-"+crypto.randomUUID()+"."+ext;
+    const {error:uploadError}=await supabaseClient.storage
+      .from("oficina-evidence")
+      .upload(storagePath,file,{contentType:file.type||"image/jpeg",upsert:false});
+    if(uploadError) throw uploadError;
+
+    rows.push({
+      work_order_id:workOrderId,
+      phase:"entry",
+      slot,
+      storage_path:storagePath,
+      required:card.classList.contains("required")
+    });
+  }
+
+  if(rows.length){
+    const {error}=await supabaseClient.from("inspection_photos").insert(rows);
+    if(error) throw error;
+  }
+}
+
+async function completeQuickOrderOnServer(fd){
+  const order=allOrders().find(o=>String(o.id)===String(completingQuickOrderId));
+  if(!(order?.server&&staffProfile?.active&&supabaseClient)) throw new Error("quick_order_not_available");
+
+  const customerId=order.raw?.customer_id;
+  if(!customerId) throw new Error("quick_order_customer_missing");
+
+  const vehicle=await findOrCreateServerVehicle(customerId,fd);
+  await uploadQuickCompletionPhotos(order.id);
+
+  const kmRaw=parseInt(String(fd.get("km")||"").replace(/\D/g,""),10);
+  const complaint=String(fd.get("complaint")||"").trim()||order.complaint||"Sem relato inicial";
+
+  const {data,error}=await supabaseClient.rpc("complete_quick_work_order",{
+    p_work_order_id:order.id,
+    p_vehicle_id:vehicle?.id||null,
+    p_complaint:complaint,
+    p_current_km:Number.isFinite(kmRaw)?kmRaw:null
+  });
+  if(error) throw error;
+
+  await syncServerData({quiet:true});
+  const mapped=serverOrders.find(o=>String(o.id)===String(order.id));
+  toast("OS rápida completada sem criar outra OS.");
+  return mapped||{...order,raw:{...(order.raw||{}),status:"budget"},status:"Em orçamento",stage:"Orçamento"};
+}
+
 async function persistOrderToServer(fd,quick){
   const customerName=String(fd.get("customer")||"").trim();
   const customer=await findOrCreateServerCustomer(customerName);
@@ -1697,6 +1764,14 @@ wizard.addEventListener("submit",async e=>{
 });
 
 async function createOrder(fd,quick){
+  if(!quick && completingQuickOrderId && staffProfile?.active && supabaseClient){
+    try{
+      return await completeQuickOrderOnServer(fd);
+    }catch(error){
+      toast("Não foi possível completar esta OS. As fotos já enviadas foram preservadas.");
+      return null;
+    }
+  }
   if(staffProfile?.active && supabaseClient){
     try{
       return await persistOrderToServer(fd,quick);
@@ -1860,16 +1935,8 @@ function renderOrderDetailInto(detail,o,useDrawer=false){
   });
 
   detail.querySelector("[data-complete-entry]")?.addEventListener("click",()=>{
-    document.getElementById("wizCustomer").value=o.customer;
-    const plate=wizard.elements.plate;
-    const vehicle=wizard.elements.vehicle;
-    const complaint=wizard.elements.complaint;
-    plate.value=o.plate==="SEM PLACA"?"":o.plate;
-    vehicle.value=o.vehicle==="Veículo a completar"?"":o.vehicle;
-    complaint.value=o.complaint==="Sem relato inicial"?"":o.complaint;
     if(useDrawer) closeDesktopOsDrawer();
-    go("new-os");
-    setWizardStep(2);
+    startQuickOrderCompletion(o);
   });
 
   loadOrderHistoryInto(o,detail.querySelector(".os-history-list"));
