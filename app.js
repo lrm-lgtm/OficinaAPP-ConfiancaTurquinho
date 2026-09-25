@@ -44,6 +44,8 @@ let serverOrders=[];
 let serverClients=[];
 let serverDataReady=false;
 let serverSyncing=false;
+let selectedCustomerId=null;
+let selectedCustomerHistory=null;
 
 function hasPermission(permission){
   return DEMO_MODE || staffPermissions.includes("*") || staffPermissions.includes(permission);
@@ -60,6 +62,7 @@ function canView(name){
     detail:()=>hasAnyPermission("work_orders.read_all","work_orders.read_assigned"),
     mechanic:()=>hasAnyPermission("work_orders.write_all","work_orders.write_assigned"),
     clients:()=>hasPermission("customers.read"),
+    "customer-detail":()=>hasPermission("customers.read"),
     "new-os":()=>hasPermission("work_orders.write_all"),
     budget:()=>hasPermission("budgets.read"),
     stock:()=>hasPermission("catalog.read"),
@@ -321,6 +324,7 @@ function go(name){
   window.scrollTo({top:0,behavior:"smooth"});
   if(name==="orders") renderOrders();
   if(name==="clients") renderClients();
+  if(name==="customer-detail") renderCustomerHistory();
   if(name==="finance") renderFinance();
   if(name==="team") renderTeam();
   if(name==="mechanic") renderMechanic();
@@ -1385,8 +1389,91 @@ function renderClients(){
   document.getElementById("clientList").innerHTML=isDesktopUI()
     ? desktopClientsTable(list)
     : list.map(clientCard).join("");
+  bindClientOpeners();
   queueScrollLock();
 }
+function bindClientOpeners(){
+  document.querySelectorAll("[data-client-id]").forEach(card=>card.addEventListener("click",event=>{
+    if(event.target.closest("button,a,input,select,textarea")) return;
+    openCustomerHistory(card.dataset.clientId);
+  }));
+}
+async function openCustomerHistory(customerId){
+  selectedCustomerId=customerId;
+  selectedCustomerHistory=null;
+  previousView="clients";
+  go("customer-detail");
+}
+function vehicleHistoryCard(vehicle){
+  const name=[vehicle.make,vehicle.model,vehicle.version].filter(Boolean).join(" ")||"Veículo sem modelo";
+  return '<article class="customer-vehicle-card">'+
+    '<div class="customer-vehicle-icon">🚗</div>'+
+    '<div><b>'+escapeHtml(name)+'</b><small>'+escapeHtml(vehicle.plate||"SEM PLACA")+(vehicle.year?' · '+escapeHtml(String(vehicle.year)):'')+'</small>'+
+      '<span>'+(vehicle.km!=null?Number(vehicle.km).toLocaleString("pt-BR")+' km':'Quilometragem não informada')+'</span></div>'+
+  '</article>';
+}
+function customerHistoryOrderCard(order,vehicles){
+  const vehicle=vehicles.find(v=>String(v.id)===String(order.vehicle_id));
+  const vehicleName=vehicle?[vehicle.make,vehicle.model,vehicle.version].filter(Boolean).join(" "):"Veículo";
+  const total=order.budget_total==null?"":'<strong>'+moneyBR(order.budget_total)+'</strong>';
+  return '<article class="customer-history-order" data-open-history-os="'+order.id+'">'+
+    '<div class="history-order-line"></div>'+
+    '<div class="history-order-main">'+
+      '<div class="history-order-head"><b>OS #'+String(order.number||"—").padStart(6,"0")+'</b><span>'+escapeHtml(serverStatusLabel(order.status))+'</span></div>'+
+      '<strong>'+escapeHtml(vehicleName||"Veículo")+(vehicle?.plate?' · '+escapeHtml(vehicle.plate):'')+'</strong>'+
+      '<small>'+shortDateTime(order.created_at)+(order.current_km!=null?' · '+Number(order.current_km).toLocaleString("pt-BR")+' km':'')+'</small>'+
+      '<p>'+escapeHtml(order.complaint||"Sem relato inicial")+'</p>'+
+    '</div>'+total+
+  '</article>';
+}
+async function renderCustomerHistory(){
+  const nameEl=document.getElementById("customerHistoryName");
+  const contactEl=document.getElementById("customerHistoryContact");
+  const vehiclesEl=document.getElementById("customerVehicleHistory");
+  const ordersEl=document.getElementById("customerOrderHistory");
+  if(!selectedCustomerId||!staffProfile?.active||!hasPermission("customers.read")){
+    if(ordersEl) ordersEl.innerHTML='<div class="search-empty">Cliente não selecionado.</div>';
+    return;
+  }
+
+  if(nameEl) nameEl.textContent="Carregando…";
+  if(vehiclesEl) vehiclesEl.innerHTML='<div class="search-empty">Carregando veículos…</div>';
+  if(ordersEl) ordersEl.innerHTML='<div class="search-empty">Carregando histórico…</div>';
+
+  const {data,error}=await supabaseClient.rpc("customer_history_for_app",{p_customer_id:selectedCustomerId});
+  if(error||!data){
+    if(nameEl) nameEl.textContent="Cliente";
+    if(ordersEl) ordersEl.innerHTML='<div class="search-empty">Não foi possível carregar o histórico.</div>';
+    return;
+  }
+
+  selectedCustomerHistory=data;
+  const customer=data.customer||{};
+  const vehicles=data.vehicles||[];
+  const orders=data.orders||[];
+
+  if(nameEl) nameEl.textContent=customer.name||"Cliente";
+  if(contactEl) contactEl.textContent=[customer.phone,customer.email].filter(Boolean).join(" · ")||"Sem contato cadastrado";
+  document.getElementById("customerHistoryOrderCount").textContent=orders.length;
+  document.getElementById("customerHistoryVehicleCount").textContent=vehicles.length;
+  const kms=[...vehicles.map(v=>Number(v.km||0)),...orders.map(o=>Number(o.current_km||0))].filter(v=>v>0);
+  document.getElementById("customerHistoryLastKm").textContent=kms.length?Math.max(...kms).toLocaleString("pt-BR")+" km":"—";
+  const approvedTotal=orders.reduce((sum,o)=>sum+Number(o.budget_total||0),0);
+  document.getElementById("customerHistoryApprovedTotal").textContent=hasPermission("budgets.read")?moneyBR(approvedTotal):"Privado";
+
+  if(vehiclesEl) vehiclesEl.innerHTML=vehicles.length?vehicles.map(vehicleHistoryCard).join(""):'<div class="search-empty">Nenhum veículo cadastrado.</div>';
+  if(ordersEl) ordersEl.innerHTML=orders.length?orders.map(o=>customerHistoryOrderCard(o,vehicles)).join(""):'<div class="search-empty">Nenhuma OS anterior.</div>';
+  ordersEl?.querySelectorAll("[data-open-history-os]").forEach(btn=>btn.addEventListener("click",()=>openDetail(btn.dataset.openHistoryOs,true)));
+}
+document.getElementById("customerHistoryBack")?.addEventListener("click",()=>go("clients"));
+document.getElementById("customerHistoryNewOs")?.addEventListener("click",()=>{
+  const customer=selectedCustomerHistory?.customer;
+  go("new-os");
+  if(customer){
+    document.getElementById("wizCustomer").value=customer.name||"";
+    setWizardStep(2);
+  }
+});
 document.getElementById("clientSearch").addEventListener("input",renderClients);
 
 const modal=document.getElementById("clientModal");
