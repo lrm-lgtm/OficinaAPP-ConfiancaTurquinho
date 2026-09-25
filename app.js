@@ -2974,6 +2974,7 @@ const pixPaymentForm=document.getElementById("pixPaymentForm");
 const pixProviderStatus=document.getElementById("pixProviderStatus");
 const pixResult=document.getElementById("pixResult");
 let lastPixCode="";
+let currentPixReceivable=null;
 
 async function ensurePilotBudgetLoaded(){
   const selectedOrder=allOrders().find(o=>String(o.id)===String(selectedBudgetOrderId));
@@ -3039,8 +3040,14 @@ async function createMercadoPagoPix(){
       },
       body:JSON.stringify({
         budget_revision_id:budget.id,
+        work_order_id:currentPixReceivable?.work_order_id||budget.order?.id||null,
+        receivable_id:currentPixReceivable?.id||null,
+        amount:currentPixReceivable
+          ? Math.max(0,Number(currentPixReceivable.amount||0)-Number(currentPixReceivable.paid_amount||0))
+          : Number(budget.total||0),
         payer_email:payerEmail,
-        payer_document:payerDigits
+        payer_document:payerDigits,
+        description:"Auto Mecânica Confiança · OS #"+String(budget.order?.number||"")
       })
     });
 
@@ -3103,6 +3110,8 @@ document.getElementById("openPixPayment")?.addEventListener("click",async()=>{
   const budget=await ensurePilotBudgetLoaded();
   pixResult.hidden=true;
   lastPixCode="";
+  currentPixReceivable=null;
+  document.getElementById("createPixBtn").disabled=false;
   document.getElementById("pixCopyPaste").value="";
   document.getElementById("pixQrImage").hidden=true;
   pixProviderStatus.textContent="Conferindo o saldo em aberto…";
@@ -3116,7 +3125,7 @@ document.getElementById("openPixPayment")?.addEventListener("click",async()=>{
 
   const {data:receivable,error}=await supabaseClient
     .from("receivables")
-    .select("amount,paid_amount,status")
+    .select("id,work_order_id,budget_revision_id,amount,paid_amount,status")
     .eq("budget_revision_id",budget.id)
     .maybeSingle();
 
@@ -3126,6 +3135,7 @@ document.getElementById("openPixPayment")?.addEventListener("click",async()=>{
     return;
   }
 
+  currentPixReceivable=receivable;
   const remaining=Math.max(0,Number(receivable.amount||0)-Number(receivable.paid_amount||0));
   document.getElementById("pixPaymentAmount").textContent=moneyBR(remaining);
   pixProviderStatus.textContent=remaining>0
