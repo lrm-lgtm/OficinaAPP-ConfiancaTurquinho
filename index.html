@@ -7,7 +7,7 @@
   <meta name="description" content="Auto Mecânica Confiança — gestão de oficina">
   <title>Auto Mecânica Confiança</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=15.0">
+  <link rel="stylesheet" href="./styles.css?v=15.1">
 </head>
 <body>
   <header class="appbar">
@@ -778,6 +778,47 @@
     </div>
   </div>
 
+  <div class="sheet" id="deliverySheet" hidden>
+    <button class="sheet-backdrop" data-close-sheet aria-label="Fechar"></button>
+    <div class="sheet-card delivery-sheet-card">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title-row">
+        <div><small>Saída do veículo</small><h2>Registrar entrega</h2></div>
+        <span class="private-badge" id="deliveryOrderRef">OS</span>
+      </div>
+
+      <div class="provider-status">Faça as quatro fotos de saída antes de concluir. A entrega fica registrada no histórico da OS.</div>
+
+      <form id="deliveryForm" class="finance-form">
+        <div class="delivery-photo-grid">
+          <label class="delivery-photo-card" data-delivery-slot="front">
+            <input type="file" accept="image/*" capture="environment" required>
+            <span class="delivery-photo-preview">📷</span><b>Frente</b><small>obrigatória</small>
+          </label>
+          <label class="delivery-photo-card" data-delivery-slot="rear">
+            <input type="file" accept="image/*" capture="environment" required>
+            <span class="delivery-photo-preview">📷</span><b>Traseira</b><small>obrigatória</small>
+          </label>
+          <label class="delivery-photo-card" data-delivery-slot="left">
+            <input type="file" accept="image/*" capture="environment" required>
+            <span class="delivery-photo-preview">📷</span><b>Lateral esquerda</b><small>obrigatória</small>
+          </label>
+          <label class="delivery-photo-card" data-delivery-slot="right">
+            <input type="file" accept="image/*" capture="environment" required>
+            <span class="delivery-photo-preview">📷</span><b>Lateral direita</b><small>obrigatória</small>
+          </label>
+        </div>
+        <div class="photo-progress delivery-progress">
+          <span id="deliveryPhotoLabel">0 de 4 obrigatórias</span>
+          <div><i id="deliveryProgressBar"></i></div>
+        </div>
+        <label>Quilometragem na saída <em>opcional</em><input id="deliveryFinalKm" inputmode="numeric" placeholder="Ex.: 124580"></label>
+        <div class="provider-status" id="deliveryStatus">A OS precisa estar como Pronta e todas as peças devem estar resolvidas.</div>
+        <button class="btn success full" type="submit" id="deliverySubmit" disabled>✓ Confirmar entrega do veículo</button>
+      </form>
+    </div>
+  </div>
+
   <div class="sheet" id="staffInviteSheet" hidden>
     <button class="sheet-backdrop" data-close-sheet aria-label="Fechar"></button>
     <div class="sheet-card team-sheet-card">
@@ -855,6 +896,6 @@
 
   <div class="toast" id="toast"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./app.js?v=15.0"></script>
+  <script src="./app.js?v=15.1"></script>
 </body>
 </html>
