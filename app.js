@@ -608,7 +608,8 @@ function historyLabel(eventType){
     purchase_receipt_added:"Compra / comprovante anexado",
     expense_added:"Despesa interna vinculada",
     manual_payment_recorded:"Recebimento registrado",
-    expense_settled:"Despesa baixada"
+    expense_settled:"Despesa baixada",
+    stock_movement_recorded:"Movimentação de estoque"
   })[eventType]||"Atualização da OS";
 }
 function historyDetail(row){
@@ -627,6 +628,7 @@ function historyDetail(row){
   if(row.event_type==="expense_added") return String(p.description||"Despesa")+" · "+moneyBR(p.amount||0);
   if(row.event_type==="manual_payment_recorded") return moneyBR(p.amount||0)+" · "+financeMethodLabel(p.method);
   if(row.event_type==="expense_settled") return moneyBR(p.amount||0)+" · "+financeMethodLabel(p.method);
+  if(row.event_type==="stock_movement_recorded") return stockMovementLabel(p.movement_type)+" · "+Number(p.quantity_delta||0).toLocaleString("pt-BR");
   return p.inspection?"Vistoria de entrada registrada.":"";
 }
 async function loadOrderHistory(order){
@@ -1038,7 +1040,7 @@ async function renderStock(){
   }
   target.innerHTML='<div class="search-empty">Carregando catálogo…</div>';
   const {data,error}=await supabaseClient.from("catalog_items")
-    .select("id,kind,name,sku,unit,sale_price,cost_price,track_stock,stock_qty,favorite,usage_count,last_used_at")
+    .select("id,kind,name,sku,unit,sale_price,track_stock,stock_qty,min_stock_qty,favorite,usage_count,last_used_at")
     .eq("active",true)
     .order("track_stock",{ascending:false})
     .order("name",{ascending:true});
@@ -1050,11 +1052,11 @@ async function renderStock(){
   renderStockRows();
   if(summary){
     const tracked=stockCatalog.filter(x=>x.track_stock);
-    const low=tracked.filter(x=>Number(x.stock_qty||0)<=2);
+    const low=tracked.filter(x=>Number(x.stock_qty||0)<=Number(x.min_stock_qty||0));
     summary.innerHTML=
       '<article><span>Catálogo</span><b>'+stockCatalog.length+'</b><small>itens ativos</small></article>'+
       '<article><span>Controlados</span><b>'+tracked.length+'</b><small>com saldo</small></article>'+
-      '<article><span>Baixo saldo</span><b>'+low.length+'</b><small>≤ 2 unidades</small></article>';
+      '<article><span>Baixo saldo</span><b>'+low.length+'</b><small>abaixo do mínimo</small></article>';
   }
 }
 function renderStockRows(){
@@ -1065,15 +1067,134 @@ function renderStockRows(){
   target.innerHTML=list.length?list.map(item=>{
     const tracked=item.track_stock;
     const qty=Number(item.stock_qty||0);
-    return '<article class="stock-real-row '+(tracked&&qty<=2?"low":"")+'">'+
+    const min=Number(item.min_stock_qty||0);
+    const low=tracked&&qty<=min;
+    const action=hasPermission("catalog.write")
+      ? '<button class="stock-row-action" data-stock-action="'+item.id+'">'+(tracked?"Movimentar":"Ativar controle")+'</button>'
+      : "";
+    return '<article class="stock-real-row '+(low?"low":"")+'">'+
       '<div class="stock-real-kind">'+(item.kind==="service"?"🔧":"▦")+'</div>'+
       '<div class="stock-real-copy"><b>'+escapeHtml(item.name)+'</b><small>'+escapeHtml(item.sku||budgetKindText(item.kind))+' · '+escapeHtml(item.unit||"un")+'</small></div>'+
       '<div class="stock-real-price"><span>Venda</span><b>'+moneyBR(item.sale_price)+'</b></div>'+
-      '<div class="stock-real-qty"><span>'+ (tracked?"Saldo":"Controle") +'</span><b>'+(tracked?qty.toLocaleString("pt-BR")+" "+escapeHtml(item.unit||"un"):"não controlado")+'</b></div>'+
+      '<div class="stock-real-qty"><span>'+ (tracked?"Saldo":"Controle") +'</span><b>'+(tracked?qty.toLocaleString("pt-BR")+" "+escapeHtml(item.unit||"un"):"não controlado")+'</b>'+(tracked?'<small>mín. '+min.toLocaleString("pt-BR")+'</small>':'')+'</div>'+
+      action+
     '</article>';
   }).join(""):'<div class="search-empty">Nenhum item encontrado.</div>';
+
+  target.querySelectorAll("[data-stock-action]").forEach(btn=>btn.addEventListener("click",async()=>{
+    const item=stockCatalog.find(x=>String(x.id)===String(btn.dataset.stockAction));
+    if(!item) return;
+    if(!item.track_stock){
+      const {error}=await supabaseClient.from("catalog_items").update({track_stock:true,stock_qty:Number(item.stock_qty||0)}).eq("id",item.id);
+      if(error){toast("Não foi possível ativar o controle.");return}
+      item.track_stock=true;
+      renderStockRows();
+      toast("Controle de estoque ativado. Registre a entrada inicial.");
+    }
+    await openStockMovement(item.id);
+  }));
 }
+
 document.getElementById("stockSearch")?.addEventListener("input",renderStockRows);
+const stockMovementSheet=document.getElementById("stockMovementSheet");
+
+function stockMovementLabel(type){
+  return ({entry:"Entrada",consume:"Consumo",return:"Devolução",adjustment:"Ajuste"})[type]||type;
+}
+async function openStockMovement(itemId){
+  const item=stockCatalog.find(x=>String(x.id)===String(itemId));
+  if(!item) return;
+  document.getElementById("stockMoveItemId").value=item.id;
+  document.getElementById("stockMoveName").textContent=item.name;
+  document.getElementById("stockMoveMeta").textContent=(item.sku||budgetKindText(item.kind))+" · "+(item.unit||"un");
+  document.getElementById("stockMoveBalance").textContent=Number(item.stock_qty||0).toLocaleString("pt-BR")+" "+(item.unit||"un");
+  document.getElementById("stockMoveType").value="entry";
+  document.getElementById("stockMoveQty").value="1";
+  document.getElementById("stockMoveCost").value="";
+  document.getElementById("stockMoveOrder").value="";
+  document.getElementById("stockMoveNote").value="";
+  document.getElementById("stockMoveCostWrap").hidden=!hasPermission("finance.write");
+  syncStockMoveFields();
+  openSheet(stockMovementSheet);
+  await loadStockMovementHistory(item.id);
+}
+function syncStockMoveFields(){
+  const type=document.getElementById("stockMoveType")?.value||"entry";
+  const orderWrap=document.getElementById("stockMoveOrderWrap");
+  const hint=document.getElementById("stockMoveHint");
+  if(orderWrap) orderWrap.hidden=type==="entry";
+  if(hint){
+    hint.textContent={
+      entry:"Entrada aumenta o saldo disponível.",
+      consume:"Consumo reduz o saldo e deve ser vinculado à OS quando possível.",
+      return:"Devolução devolve a peça ao saldo.",
+      adjustment:"Ajuste aceita quantidade positiva ou negativa para inventário físico."
+    }[type];
+  }
+}
+async function loadStockMovementHistory(itemId){
+  const target=document.getElementById("stockMoveHistory");
+  if(!target) return;
+  const {data,error}=await supabaseClient.from("stock_movements")
+    .select("id,movement_type,quantity_delta,note,created_at,work_order_id")
+    .eq("catalog_item_id",itemId)
+    .order("created_at",{ascending:false})
+    .limit(12);
+  if(error){
+    target.innerHTML='<div class="search-empty">Histórico indisponível.</div>';
+    return;
+  }
+  target.innerHTML=(data||[]).length?(data||[]).map(row=>
+    '<article class="stock-move-history-row">'+
+      '<div><b>'+escapeHtml(stockMovementLabel(row.movement_type))+'</b><small>'+formatDecisionTime(row.created_at)+(row.note?' · '+escapeHtml(row.note):'')+'</small></div>'+
+      '<strong class="'+(Number(row.quantity_delta)>=0?"positive":"negative")+'">'+(Number(row.quantity_delta)>=0?"+":"")+Number(row.quantity_delta).toLocaleString("pt-BR")+'</strong>'+
+    '</article>'
+  ).join(""):'<div class="search-empty">Nenhuma movimentação registrada.</div>';
+}
+document.getElementById("stockMoveType")?.addEventListener("change",syncStockMoveFields);
+document.getElementById("stockMovementForm")?.addEventListener("submit",async event=>{
+  event.preventDefault();
+  if(!hasPermission("catalog.write")) return toast("Seu perfil não pode movimentar estoque.");
+  const itemId=document.getElementById("stockMoveItemId").value;
+  const type=document.getElementById("stockMoveType").value;
+  const qty=parseMoneyInput(document.getElementById("stockMoveQty").value);
+  const note=document.getElementById("stockMoveNote").value.trim();
+  const orderInput=document.getElementById("stockMoveOrder").value.trim();
+  const costText=document.getElementById("stockMoveCost").value.trim();
+  const cost=costText?parseMoneyInput(costText):null;
+  const submit=event.currentTarget.querySelector('button[type="submit"]');
+  submit.disabled=true;
+  try{
+    let orderId=null;
+    if(orderInput){
+      const order=await resolveWorkOrderFromInput(orderInput);
+      if(!order){toast("OS não encontrada.");return}
+      orderId=order.id;
+    }
+    const {error}=await supabaseClient.rpc("record_stock_movement",{
+      p_catalog_item_id:itemId,
+      p_movement_type:type,
+      p_quantity:qty,
+      p_work_order_id:orderId,
+      p_note:note||null,
+      p_unit_cost:hasPermission("finance.write")?cost:null
+    });
+    if(error){
+      if(String(error.message||"").includes("insufficient_stock")) toast("Saldo insuficiente para esse consumo.");
+      else if(String(error.message||"").includes("stock_not_enabled")) toast("Ative o controle de estoque deste item.");
+      else toast("Não foi possível registrar a movimentação.");
+      return;
+    }
+    await renderStock();
+    const item=stockCatalog.find(x=>String(x.id)===String(itemId));
+    if(item){
+      document.getElementById("stockMoveBalance").textContent=Number(item.stock_qty||0).toLocaleString("pt-BR")+" "+(item.unit||"un");
+      await loadStockMovementHistory(itemId);
+    }
+    toast("Movimentação registrada.");
+  }finally{submit.disabled=false}
+});
+
 document.querySelectorAll("[data-permission-role]").forEach(btn=>btn.addEventListener("click",()=>{
   currentPermissionRole=btn.dataset.permissionRole;
   document.querySelectorAll("[data-permission-role]").forEach(x=>x.classList.toggle("active",x===btn));
@@ -3520,13 +3641,13 @@ const staffMemberSheet=document.getElementById("staffMemberSheet");
 
 function openSheet(sheet){
   if(!sheet) return;
-  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,manualPaymentSheet,settleExpenseSheet,staffAuthSheet,pixPaymentSheet,osQuickSheet,budgetItemSheet,budgetSendSheet,staffInviteSheet,staffMemberSheet].forEach(s=>{if(s && s!==sheet)s.hidden=true});
+  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,manualPaymentSheet,settleExpenseSheet,stockMovementSheet,staffAuthSheet,pixPaymentSheet,osQuickSheet,budgetItemSheet,budgetSendSheet,staffInviteSheet,staffMemberSheet].forEach(s=>{if(s && s!==sheet)s.hidden=true});
   sheet.hidden=false;
   document.body.classList.add("sheet-open");
   document.body.classList.remove("no-scroll");
 }
 function closeSheets(){
-  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,manualPaymentSheet,settleExpenseSheet,staffAuthSheet,pixPaymentSheet,osQuickSheet,budgetItemSheet,budgetSendSheet,staffInviteSheet,staffMemberSheet].forEach(s=>{if(s)s.hidden=true});
+  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,manualPaymentSheet,settleExpenseSheet,stockMovementSheet,staffAuthSheet,pixPaymentSheet,osQuickSheet,budgetItemSheet,budgetSendSheet,staffInviteSheet,staffMemberSheet].forEach(s=>{if(s)s.hidden=true});
   document.body.classList.remove("sheet-open");
   queueScrollLock();
 }
