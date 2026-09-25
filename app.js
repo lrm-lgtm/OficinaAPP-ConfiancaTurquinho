@@ -282,6 +282,9 @@ let currentKanbanStage="today";
 let currentKanbanHealth="";
 let currentMechanicFilter="active";
 let stockCatalog=[];
+let currentFinanceTab="overview";
+let financeTransactions=[];
+let financeReceivables=[];
 let wizardStep=1;
 let requiredPhotos=new Set();
 let deferredPrompt=null;
@@ -603,7 +606,9 @@ function historyLabel(eventType){
     budget_sent:"Orçamento enviado para aprovação",
     inspection_completed:"Vistoria concluída",
     purchase_receipt_added:"Compra / comprovante anexado",
-    expense_added:"Despesa interna vinculada"
+    expense_added:"Despesa interna vinculada",
+    manual_payment_recorded:"Recebimento registrado",
+    expense_settled:"Despesa baixada"
   })[eventType]||"Atualização da OS";
 }
 function historyDetail(row){
@@ -620,6 +625,8 @@ function historyDetail(row){
   if(row.event_type==="budget_revision_requested") return "Orçamento devolvido para ajuste.";
   if(row.event_type==="purchase_receipt_added") return (p.supplier?String(p.supplier)+" · ":"")+moneyBR(p.total||0);
   if(row.event_type==="expense_added") return String(p.description||"Despesa")+" · "+moneyBR(p.amount||0);
+  if(row.event_type==="manual_payment_recorded") return moneyBR(p.amount||0)+" · "+financeMethodLabel(p.method);
+  if(row.event_type==="expense_settled") return moneyBR(p.amount||0)+" · "+financeMethodLabel(p.method);
   return p.inspection?"Vistoria de entrada registrada.":"";
 }
 async function loadOrderHistory(order){
@@ -2843,6 +2850,8 @@ document.getElementById("rejectBudget").addEventListener("click",async()=>{
   }
 });
 // ---- v11.2 internal finance UI ----
+const manualPaymentSheet=document.getElementById("manualPaymentSheet");
+const settleExpenseSheet=document.getElementById("settleExpenseSheet");
 const financeReceiptSheet=document.getElementById("financeReceiptSheet");
 const financeExpenseSheet=document.getElementById("financeExpenseSheet");
 const financeReceiptInput=document.getElementById("financeReceiptInput");
@@ -2861,83 +2870,231 @@ function parseMoneyInput(value){
   const number=Number(normalized);
   return Number.isFinite(number)?number:0;
 }
+function isFinanceOverdue(row){
+  return Boolean(row.due_at)
+    && new Date(row.due_at).getTime()<Date.now()
+    && !["paid","cancelled"].includes(row.status);
+}
+function financeDueLabel(row){
+  if(!row.due_at) return "sem vencimento";
+  const date=new Date(row.due_at);
+  const formatted=new Intl.DateTimeFormat("pt-BR").format(date);
+  return isFinanceOverdue(row)?"vencido em "+formatted:"vence em "+formatted;
+}
+function financeMethodLabel(method){
+  return ({
+    pix:"Pix",cash:"Dinheiro",debit_card:"Débito",credit_card:"Crédito",
+    transfer:"Transferência",other:"Outro"
+  })[method]||method||"Não informado";
+}
+function receivableDisplay(row){
+  const order=row.work_orders||{};
+  const customer=order.customers||{};
+  const remaining=Math.max(0,Number(row.amount||0)-Number(row.paid_amount||0));
+  const mode=row.budget_revisions?.payment_mode||"pay_now";
+  return '<article class="finance-detail-row '+(isFinanceOverdue(row)?"overdue":"")+'">'+
+    '<div class="finance-detail-copy">'+
+      '<div class="finance-detail-title"><b>OS #'+String(order.number||"—").padStart(6,"0")+'</b><span class="finance-mode '+mode+'">'+(mode==="credit"?"Crediário":"Cobrança")+'</span></div>'+
+      '<strong>'+escapeHtml(customer.name||"Cliente")+'</strong>'+
+      '<small>'+financeDueLabel(row)+' · '+escapeHtml(row.status)+'</small>'+
+    '</div>'+
+    '<div class="finance-detail-value"><span>Saldo</span><b>'+moneyBR(remaining)+'</b><small>de '+moneyBR(row.amount)+'</small></div>'+
+    (hasPermission("finance.write")&&remaining>0?'<button class="finance-row-action" data-receive="'+row.id+'">Receber</button>':'')+
+  '</article>';
+}
+function payableDisplay(row){
+  const open=!["paid","cancelled","refunded"].includes(row.status);
+  return '<article class="finance-detail-row '+(row.due_at&&new Date(row.due_at)<new Date()&&open?"overdue":"")+'">'+
+    '<div class="finance-detail-copy">'+
+      '<div class="finance-detail-title"><b>'+escapeHtml(row.category)+'</b><span class="finance-mode expense">Despesa</span></div>'+
+      '<strong>'+escapeHtml(row.description)+'</strong>'+
+      '<small>'+(row.due_at?financeDueLabel(row):"sem vencimento")+' · '+escapeHtml(row.status)+'</small>'+
+    '</div>'+
+    '<div class="finance-detail-value"><span>Valor</span><b>'+moneyBR(row.amount)+'</b><small>'+escapeHtml(financeMethodLabel(row.payment_method))+'</small></div>'+
+    (hasPermission("finance.write")&&open?'<button class="finance-row-action" data-settle-expense="'+row.id+'">Baixar</button>':'')+
+  '</article>';
+}
+function movementDisplay(row){
+  const sign=row.direction==="income"?"+ ":"- ";
+  return '<article class="finance-row '+row.direction+'">'+
+    '<div class="finance-row-icon">'+(row.direction==="income"?"↙":"↗")+'</div>'+
+    '<div class="finance-row-copy"><b>'+escapeHtml(row.description)+'</b><small>'+escapeHtml(row.category)+(row.work_order_id?' · vinculada à OS':'')+'</small></div>'+
+    '<div class="finance-row-value"><b>'+sign+moneyBR(row.amount)+'</b><small>'+escapeHtml(row.status)+' · '+escapeHtml(financeMethodLabel(row.payment_method))+'</small></div>'+
+  '</article>';
+}
+function bindFinanceActions(){
+  document.querySelectorAll("[data-receive]").forEach(btn=>btn.addEventListener("click",()=>openManualPayment(btn.dataset.receive)));
+  document.querySelectorAll("[data-settle-expense]").forEach(btn=>btn.addEventListener("click",()=>openSettleExpense(btn.dataset.settleExpense)));
+}
+function renderFinanceRows(){
+  const list=document.getElementById("financeList");
+  const title=document.getElementById("financeListTitle");
+  const subtitle=document.getElementById("financeListSubtitle");
+  if(!list) return;
+
+  const openReceivables=financeReceivables.filter(r=>!["paid","cancelled"].includes(r.status));
+  const creditReceivables=openReceivables.filter(r=>r.budget_revisions?.payment_mode==="credit");
+  const payables=financeTransactions.filter(r=>r.direction==="expense");
+  const openPayables=payables.filter(r=>!["paid","cancelled","refunded"].includes(r.status));
+
+  if(currentFinanceTab==="receivables"){
+    if(title) title.textContent="Contas a receber";
+    if(subtitle) subtitle.textContent="Cobranças e saldos em aberto";
+    list.innerHTML=openReceivables.length?openReceivables.map(receivableDisplay).join(""):'<div class="search-empty">Nenhum valor em aberto.</div>';
+  }else if(currentFinanceTab==="credit"){
+    if(title) title.textContent="Crediário";
+    if(subtitle) subtitle.textContent="Orçamentos aprovados para pagar depois";
+    list.innerHTML=creditReceivables.length?creditReceivables.map(receivableDisplay).join(""):'<div class="search-empty">Nenhum crediário em aberto.</div>';
+  }else if(currentFinanceTab==="payables"){
+    if(title) title.textContent="Contas a pagar";
+    if(subtitle) subtitle.textContent="Compras e despesas da oficina";
+    list.innerHTML=payables.length?payables.map(payableDisplay).join(""):'<div class="search-empty">Nenhuma despesa registrada.</div>';
+  }else if(currentFinanceTab==="movements"){
+    if(title) title.textContent="Movimentos";
+    if(subtitle) subtitle.textContent="Entradas e saídas registradas";
+    list.innerHTML=financeTransactions.length?financeTransactions.map(movementDisplay).join(""):'<div class="search-empty">Nenhum movimento financeiro.</div>';
+  }else{
+    if(title) title.textContent="Visão financeira";
+    if(subtitle) subtitle.textContent="Pendências que pedem atenção";
+    const overdue=openReceivables.filter(isFinanceOverdue);
+    const attention=[...overdue.slice(0,6),...openPayables.slice(0,6)];
+    list.innerHTML=attention.length
+      ? overdue.slice(0,6).map(receivableDisplay).join("")+openPayables.slice(0,6).map(payableDisplay).join("")
+      : '<div class="finance-clear">✓ Nenhuma pendência financeira crítica.</div>';
+  }
+  bindFinanceActions();
+}
 async function renderFinance(){
   const list=document.getElementById("financeList");
   if(!list) return;
 
-  if(staffProfile?.active && supabaseClient){
-    list.innerHTML='<div class="search-empty">Carregando financeiro…</div>';
-    try{
-      const [{data:transactions,error:txError},{data:receivables,error:recError}]=await Promise.all([
-        supabaseClient.from("financial_transactions")
-          .select("id,work_order_id,direction,category,description,amount,status,due_at,settled_at,payment_method,created_at")
-          .order("created_at",{ascending:false})
-          .limit(30),
-        supabaseClient.from("receivables")
-          .select("id,work_order_id,amount,paid_amount,status,due_at")
-      ]);
-      if(txError) throw txError;
-      if(recError) throw recError;
-
-      const tx=transactions||[];
-      const rec=receivables||[];
-      const receivableTotal=rec
-        .filter(r=>!["paid","cancelled"].includes(r.status))
-        .reduce((sum,r)=>sum+Math.max(0,Number(r.amount||0)-Number(r.paid_amount||0)),0);
-      const payableTotal=tx
-        .filter(r=>r.direction==="expense"&&!["paid","cancelled","refunded"].includes(r.status))
-        .reduce((sum,r)=>sum+Number(r.amount||0),0);
-      const income=tx.filter(r=>r.direction==="income"&&r.status!=="cancelled").reduce((s,r)=>s+Number(r.amount||0),0);
-      const expenses=tx.filter(r=>r.direction==="expense"&&r.status!=="cancelled").reduce((s,r)=>s+Number(r.amount||0),0);
-
-      document.getElementById("financeReceivableTotal").textContent=moneyBR(receivableTotal);
-      document.getElementById("financeReceivableMeta").textContent=rec.filter(r=>!["paid","cancelled"].includes(r.status)).length+" em aberto";
-      document.getElementById("financePayableTotal").textContent=moneyBR(payableTotal);
-      document.getElementById("financeResultTotal").textContent=moneyBR(income-expenses);
-
-      list.innerHTML=tx.length?tx.map(row=>
-        '<article class="finance-row '+row.direction+'">'+
-          '<div class="finance-row-icon">'+(row.direction==="income"?"↙":"↗")+'</div>'+
-          '<div class="finance-row-copy"><b>'+escapeHtml(row.description)+'</b><small>'+escapeHtml(row.category)+(row.work_order_id?' · vinculada à OS':'')+'</small></div>'+
-          '<div class="finance-row-value"><b>'+(row.direction==="income"?"+ ":"- ")+moneyBR(row.amount)+'</b><small>'+escapeHtml(row.status)+'</small></div>'+
-        '</article>'
-      ).join(""):'<div class="search-empty">Nenhum movimento financeiro ainda.</div>';
-      return;
-    }catch(error){
-      list.innerHTML='<div class="search-empty">Não foi possível carregar o financeiro do servidor.</div>';
-      return;
-    }
+  if(!(staffProfile?.active&&supabaseClient&&hasPermission("finance.read"))){
+    document.getElementById("financeReceivableTotal").textContent=moneyBR(0);
+    document.getElementById("financeOverdueTotal").textContent=moneyBR(0);
+    document.getElementById("financePayableTotal").textContent=moneyBR(0);
+    document.getElementById("financeReceivedMonth").textContent=moneyBR(0);
+    list.innerHTML='<div class="search-empty">Seu perfil não possui acesso ao financeiro.</div>';
+    return;
   }
 
-  const base=[
-    {type:"income",title:"OS #000123",meta:"A receber · João da Silva",amount:720,status:"Aberto"},
-    {type:"expense",title:"Compra de peças",meta:"Auto Peças Centro · OS #000121",amount:316,status:"Pago"},
-    {type:"expense",title:"Frete fornecedor",meta:"Despesa vinculada · OS #000119",amount:120,status:"Aberto"}
-  ];
-  const drafts=financeDrafts().map(d=>({
-    type:d.type||"expense",
-    title:d.title||"Rascunho financeiro",
-    meta:d.meta||"Rascunho local",
-    amount:Number(d.amount||0),
-    status:"Rascunho",
-    receipt:d.receiptName||""
-  }));
-  const rows=[...drafts,...base];
-  const receivableTotal=rows.filter(x=>x.type==="income").reduce((s,x)=>s+Number(x.amount||0),0);
-  const payableTotal=rows.filter(x=>x.type==="expense").reduce((s,x)=>s+Number(x.amount||0),0);
-  document.getElementById("financeReceivableTotal").textContent=moneyBR(receivableTotal);
-  document.getElementById("financeReceivableMeta").textContent=rows.filter(x=>x.type==="income").length+" em aberto";
-  document.getElementById("financePayableTotal").textContent=moneyBR(payableTotal);
-  document.getElementById("financeResultTotal").textContent=moneyBR(receivableTotal-payableTotal);
+  list.innerHTML='<div class="search-empty">Carregando financeiro…</div>';
+  try{
+    const [txResult,recResult]=await Promise.all([
+      supabaseClient.from("financial_transactions")
+        .select("id,work_order_id,purchase_id,payment_id,direction,category,description,amount,status,due_at,settled_at,payment_method,created_at")
+        .order("created_at",{ascending:false})
+        .limit(120),
+      supabaseClient.from("receivables")
+        .select("id,work_order_id,budget_revision_id,amount,paid_amount,status,due_at,created_at,work_orders(number,customers(name)),budget_revisions(payment_mode,payment_due_at)")
+        .order("created_at",{ascending:false})
+    ]);
+    if(txResult.error) throw txResult.error;
+    if(recResult.error) throw recResult.error;
 
-  list.innerHTML=rows.map(row=>
-    '<article class="finance-row '+row.type+'">'+
-      '<div class="finance-row-icon">'+(row.type==="income"?"↙":"↗")+'</div>'+
-      '<div class="finance-row-copy"><b>'+escapeHtml(row.title)+'</b><small>'+escapeHtml(row.meta)+(row.receipt?' · 📎 '+escapeHtml(row.receipt):'')+'</small></div>'+
-      '<div class="finance-row-value"><b>'+(row.type==="income"?"+ ":"- ")+moneyBR(row.amount)+'</b><small>'+escapeHtml(row.status)+'</small></div>'+
-    '</article>'
-  ).join("");
+    financeTransactions=txResult.data||[];
+    financeReceivables=recResult.data||[];
+
+    const openRec=financeReceivables.filter(r=>!["paid","cancelled"].includes(r.status));
+    const receivableTotal=openRec.reduce((sum,r)=>sum+Math.max(0,Number(r.amount||0)-Number(r.paid_amount||0)),0);
+    const overdueRows=openRec.filter(isFinanceOverdue);
+    const overdueTotal=overdueRows.reduce((sum,r)=>sum+Math.max(0,Number(r.amount||0)-Number(r.paid_amount||0)),0);
+    const openExpenses=financeTransactions.filter(r=>r.direction==="expense"&&!["paid","cancelled","refunded"].includes(r.status));
+    const payableTotal=openExpenses.reduce((sum,r)=>sum+Number(r.amount||0),0);
+
+    const now=new Date();
+    const monthStart=new Date(now.getFullYear(),now.getMonth(),1).getTime();
+    const receivedRows=financeTransactions.filter(r=>r.direction==="income"&&r.status==="paid"&&new Date(r.settled_at||r.created_at).getTime()>=monthStart);
+    const receivedMonth=receivedRows.reduce((sum,r)=>sum+Number(r.amount||0),0);
+
+    document.getElementById("financeReceivableTotal").textContent=moneyBR(receivableTotal);
+    document.getElementById("financeReceivableMeta").textContent=openRec.length+" em aberto";
+    document.getElementById("financeOverdueTotal").textContent=moneyBR(overdueTotal);
+    document.getElementById("financeOverdueMeta").textContent=overdueRows.length+" vencido"+(overdueRows.length===1?"":"s");
+    document.getElementById("financePayableTotal").textContent=moneyBR(payableTotal);
+    document.getElementById("financeReceivedMonth").textContent=moneyBR(receivedMonth);
+    document.getElementById("financeReceivedMeta").textContent=receivedRows.length+" recebimento"+(receivedRows.length===1?"":"s");
+
+    renderFinanceRows();
+  }catch(error){
+    list.innerHTML='<div class="search-empty">Não foi possível carregar o financeiro do servidor.</div>';
+  }
 }
+
+async function openManualPayment(receivableId){
+  const row=financeReceivables.find(x=>String(x.id)===String(receivableId));
+  if(!row) return;
+  const remaining=Math.max(0,Number(row.amount||0)-Number(row.paid_amount||0));
+  const order=row.work_orders||{};
+  const customer=order.customers||{};
+  document.getElementById("manualPaymentReceivableId").value=row.id;
+  document.getElementById("manualPaymentRef").textContent="OS #"+String(order.number||"—").padStart(6,"0");
+  document.getElementById("manualPaymentCustomer").textContent=customer.name||"Cliente";
+  document.getElementById("manualPaymentRemaining").textContent=moneyBR(remaining);
+  document.getElementById("manualPaymentAmount").value=remaining.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById("manualPaymentMethod").value="pix";
+  document.getElementById("manualPaymentNote").value="";
+  openSheet(manualPaymentSheet);
+}
+function openSettleExpense(transactionId){
+  const row=financeTransactions.find(x=>String(x.id)===String(transactionId));
+  if(!row) return;
+  document.getElementById("settleExpenseId").value=row.id;
+  document.getElementById("settleExpenseCategory").textContent=row.category||"Despesa";
+  document.getElementById("settleExpenseDescription").textContent=row.description||"—";
+  document.getElementById("settleExpenseAmount").textContent=moneyBR(row.amount);
+  document.getElementById("settleExpenseMethod").value=row.payment_method||"pix";
+  openSheet(settleExpenseSheet);
+}
+
+document.querySelectorAll("[data-finance-tab]").forEach(btn=>btn.addEventListener("click",()=>{
+  currentFinanceTab=btn.dataset.financeTab;
+  document.querySelectorAll("[data-finance-tab]").forEach(x=>x.classList.toggle("active",x===btn));
+  renderFinanceRows();
+}));
+document.getElementById("financeRefreshBtn")?.addEventListener("click",renderFinance);
+
+document.getElementById("manualPaymentForm")?.addEventListener("submit",async event=>{
+  event.preventDefault();
+  if(!hasPermission("finance.write")) return toast("Seu perfil não pode registrar recebimentos.");
+  const id=document.getElementById("manualPaymentReceivableId").value;
+  const amount=parseMoneyInput(document.getElementById("manualPaymentAmount").value);
+  const method=document.getElementById("manualPaymentMethod").value;
+  const note=document.getElementById("manualPaymentNote").value.trim();
+  const submit=event.currentTarget.querySelector('button[type="submit"]');
+  submit.disabled=true;
+  try{
+    const {error}=await supabaseClient.rpc("record_manual_payment",{
+      p_receivable_id:id,p_amount:amount,p_method:method,p_note:note||null
+    });
+    if(error) throw error;
+    closeSheets();
+    await renderFinance();
+    toast("Recebimento registrado.");
+  }catch(error){
+    if(String(error.message||"").includes("invalid_amount")) toast("Confira o valor recebido.");
+    else toast("Não foi possível registrar o recebimento.");
+  }finally{submit.disabled=false}
+});
+
+document.getElementById("settleExpenseForm")?.addEventListener("submit",async event=>{
+  event.preventDefault();
+  if(!hasPermission("finance.write")) return toast("Seu perfil não pode baixar despesas.");
+  const id=document.getElementById("settleExpenseId").value;
+  const method=document.getElementById("settleExpenseMethod").value;
+  const submit=event.currentTarget.querySelector('button[type="submit"]');
+  submit.disabled=true;
+  try{
+    const {error}=await supabaseClient.rpc("settle_expense",{
+      p_transaction_id:id,p_method:method,p_settled_at:new Date().toISOString()
+    });
+    if(error) throw error;
+    closeSheets();
+    await renderFinance();
+    toast("Despesa baixada.");
+  }catch{
+    toast("Não foi possível baixar a despesa.");
+  }finally{submit.disabled=false}
+});
 
 async function resolveWorkOrderFromInput(value){
   const raw=String(value||"").trim();
@@ -3363,13 +3520,13 @@ const staffMemberSheet=document.getElementById("staffMemberSheet");
 
 function openSheet(sheet){
   if(!sheet) return;
-  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,staffAuthSheet,pixPaymentSheet,osQuickSheet,budgetItemSheet,budgetSendSheet,staffInviteSheet,staffMemberSheet].forEach(s=>{if(s && s!==sheet)s.hidden=true});
+  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,manualPaymentSheet,settleExpenseSheet,staffAuthSheet,pixPaymentSheet,osQuickSheet,budgetItemSheet,budgetSendSheet,staffInviteSheet,staffMemberSheet].forEach(s=>{if(s && s!==sheet)s.hidden=true});
   sheet.hidden=false;
   document.body.classList.add("sheet-open");
   document.body.classList.remove("no-scroll");
 }
 function closeSheets(){
-  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,staffAuthSheet,pixPaymentSheet,osQuickSheet,budgetItemSheet,budgetSendSheet,staffInviteSheet,staffMemberSheet].forEach(s=>{if(s)s.hidden=true});
+  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,manualPaymentSheet,settleExpenseSheet,staffAuthSheet,pixPaymentSheet,osQuickSheet,budgetItemSheet,budgetSendSheet,staffInviteSheet,staffMemberSheet].forEach(s=>{if(s)s.hidden=true});
   document.body.classList.remove("sheet-open");
   queueScrollLock();
 }
