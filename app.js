@@ -2729,7 +2729,7 @@ async function sendBudgetForApproval(paymentMode=currentBudgetRevision?.payment_
     toast("Não foi possível gerar um token de aprovação.");
     return;
   }
-  const link=location.origin+location.pathname+"?approval="+encodeURIComponent(currentApprovalToken)+"&v=12.5#aprovar";
+  const link=location.origin+location.pathname+"?approval="+encodeURIComponent(currentApprovalToken)+"&v=15.9#aprovar";
   try{await navigator.clipboard.writeText(link);toast("Link da revisão atual copiado.");}
   catch{toast("Revisão pronta para compartilhar.");}
 }
