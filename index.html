@@ -7,7 +7,7 @@
   <meta name="description" content="Auto Mecânica Confiança — gestão de oficina">
   <title>Auto Mecânica Confiança</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=14.2">
+  <link rel="stylesheet" href="./styles.css?v=14.4">
 </head>
 <body>
   <header class="appbar">
@@ -688,6 +688,31 @@
     </div>
   </div>
 
+  <div class="sheet" id="reservedPartSheet" hidden>
+    <button class="sheet-backdrop" data-close-sheet aria-label="Fechar"></button>
+    <div class="sheet-card reserved-part-sheet-card">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title-row">
+        <div><small>Peça reservada</small><h2 id="reservedPartTitle">Confirmar instalação</h2></div>
+        <span class="private-badge">OS</span>
+      </div>
+
+      <div class="reserved-part-summary">
+        <div><b id="reservedPartName">Peça</b><small id="reservedPartMeta">—</small></div>
+        <strong id="reservedPartAvailable">0 un</strong>
+      </div>
+
+      <form id="reservedPartForm" class="finance-form">
+        <input type="hidden" id="reservedPartId">
+        <label>Quantidade instalada<input id="reservedPartQty" inputmode="decimal" value="1" required></label>
+        <label>Observação interna<input id="reservedPartNote" placeholder="Ex.: instalada no lado direito"></label>
+        <div class="provider-status" id="reservedPartHint">Ao confirmar, a peça sai do estoque físico e fica registrada no histórico da OS.</div>
+        <button class="btn success full" type="submit">✓ Confirmar instalação</button>
+        <button class="btn secondary full" type="button" id="releaseReservedPart">Não utilizada · liberar restante</button>
+      </form>
+    </div>
+  </div>
+
   <div class="sheet" id="stockMovementSheet" hidden>
     <button class="sheet-backdrop" data-close-sheet aria-label="Fechar"></button>
     <div class="sheet-card stock-movement-sheet-card">
@@ -803,6 +828,6 @@
 
   <div class="toast" id="toast"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./app.js?v=14.2"></script>
+  <script src="./app.js?v=14.4"></script>
 </body>
 </html>
