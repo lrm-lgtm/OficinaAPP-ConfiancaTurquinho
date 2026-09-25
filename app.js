@@ -3547,7 +3547,7 @@ financeExpenseForm?.addEventListener("submit",async event=>{
   toast("Despesa registrada como rascunho local.");
 });
 
-document.getElementById("finishService").addEventListener("click",()=>{
+document.getElementById("finishService")?.addEventListener("click",()=>{
   const pending=[...document.querySelectorAll(".task input")].filter(x=>!x.checked).length;
   if(pending){toast("Ainda existem "+pending+" tarefas pendentes.");return}
   toast("Serviço concluído. Próxima etapa: vistoria de saída.");
