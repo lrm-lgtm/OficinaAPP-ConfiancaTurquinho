@@ -7,7 +7,7 @@
   <meta name="description" content="Auto Mecânica Confiança — gestão de oficina">
   <title>Auto Mecânica Confiança</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=14.5">
+  <link rel="stylesheet" href="./styles.css?v=15.0">
 </head>
 <body>
   <header class="appbar">
@@ -118,6 +118,33 @@
       <div class="page-title"><div><span>Relacionamento</span><h1>Clientes</h1></div><button class="btn primary compact" id="newClientBtn">＋ Novo</button></div>
       <label class="search"><span>⌕</span><input id="clientSearch" placeholder="Buscar nome, telefone ou veículo"></label>
       <div class="stack" id="clientList"></div>
+    </section>
+
+    <section class="view desktop-workspace" data-view="customer-detail">
+      <div class="customer-history-head">
+        <button class="customer-history-back" type="button" id="customerHistoryBack">‹</button>
+        <div><span>Cliente / veículo</span><h1 id="customerHistoryName">Histórico</h1><small id="customerHistoryContact">—</small></div>
+        <button class="btn primary compact" type="button" id="customerHistoryNewOs">＋ Nova OS</button>
+      </div>
+
+      <div class="customer-history-kpis">
+        <article><span>Ordens</span><b id="customerHistoryOrderCount">0</b><small>registradas</small></article>
+        <article><span>Veículos</span><b id="customerHistoryVehicleCount">0</b><small>cadastrados</small></article>
+        <article><span>Último km</span><b id="customerHistoryLastKm">—</b><small>maior registro</small></article>
+        <article><span>Total aprovado</span><b id="customerHistoryApprovedTotal">—</b><small>quando permitido</small></article>
+      </div>
+
+      <div class="customer-history-layout">
+        <section class="customer-history-panel">
+          <div class="section-head compact"><div><h2>Veículos</h2><small>Dados e quilometragem conhecida</small></div></div>
+          <div id="customerVehicleHistory" class="customer-vehicle-list"><div class="search-empty">Carregando veículos…</div></div>
+        </section>
+
+        <section class="customer-history-panel">
+          <div class="section-head compact"><div><h2>Histórico de serviços</h2><small>OS anteriores em ordem cronológica</small></div></div>
+          <div id="customerOrderHistory" class="customer-order-history"><div class="search-empty">Carregando histórico…</div></div>
+        </section>
+      </div>
     </section>
 
     <section class="view" data-view="new-os">
@@ -828,6 +855,6 @@
 
   <div class="toast" id="toast"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./app.js?v=14.5"></script>
+  <script src="./app.js?v=15.0"></script>
 </body>
 </html>
