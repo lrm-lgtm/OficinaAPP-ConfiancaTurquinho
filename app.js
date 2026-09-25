@@ -28,6 +28,12 @@ const supabaseClient=window.supabase?.createClient
   : null;
 let staffSession=null;
 let staffProfile=null;
+let staffPermissions=[];
+let assignableStaff=[];
+let teamDirectory=[];
+let permissionCatalog=[];
+let rolePermissionRows=[];
+let currentPermissionRole="manager";
 let remoteBudgetState=null;
 let remoteApprovalState=null;
 let selectedBudgetOrderId=null;
@@ -38,6 +44,73 @@ let serverOrders=[];
 let serverClients=[];
 let serverDataReady=false;
 let serverSyncing=false;
+
+function hasPermission(permission){
+  return DEMO_MODE || staffPermissions.includes("*") || staffPermissions.includes(permission);
+}
+function hasAnyPermission(...permissions){
+  return DEMO_MODE || staffPermissions.includes("*") || permissions.some(permission=>staffPermissions.includes(permission));
+}
+function canView(name){
+  if(name==="client-approval") return true;
+  if(DEMO_MODE) return true;
+  const map={
+    dashboard:()=>hasAnyPermission("work_orders.read_all","work_orders.read_assigned"),
+    orders:()=>hasAnyPermission("work_orders.read_all","work_orders.read_assigned"),
+    detail:()=>hasAnyPermission("work_orders.read_all","work_orders.read_assigned"),
+    mechanic:()=>hasAnyPermission("work_orders.write_all","work_orders.write_assigned"),
+    clients:()=>hasPermission("customers.read"),
+    "new-os":()=>hasPermission("work_orders.write_all"),
+    budget:()=>hasPermission("budgets.read"),
+    stock:()=>hasPermission("catalog.read"),
+    finance:()=>hasPermission("finance.read"),
+    team:()=>hasPermission("team.read")
+  };
+  return map[name]?map[name]():true;
+}
+function applyPermissionUI(){
+  const navRules={
+    dashboard:hasAnyPermission("work_orders.read_all","work_orders.read_assigned"),
+    orders:hasAnyPermission("work_orders.read_all","work_orders.read_assigned"),
+    clients:hasPermission("customers.read"),
+    "new-os":hasPermission("work_orders.write_all"),
+    mechanic:hasAnyPermission("work_orders.write_all","work_orders.write_assigned"),
+    stock:hasPermission("catalog.read"),
+    finance:hasPermission("finance.read"),
+    team:hasPermission("team.read")
+  };
+  document.querySelectorAll("[data-go],[data-sheet-go]").forEach(el=>{
+    const target=el.dataset.go||el.dataset.sheetGo;
+    if(target in navRules) el.hidden=!navRules[target];
+  });
+
+  const setVisible=(selector,visible)=>{
+    document.querySelectorAll(selector).forEach(el=>el.hidden=!visible);
+  };
+  setVisible("#newClientBtn,[data-sheet-client]",hasPermission("customers.write"));
+  setVisible("#financeReceiptShortcut,#financeExpenseShortcut",hasPermission("finance.write"));
+  setVisible("#addBudgetItem,#newBudgetRevision",hasPermission("budgets.write"));
+  setVisible("#copyApproval",hasPermission("budgets.send"));
+  setVisible("#inviteStaffBtn",hasPermission("team.manage"));
+
+  const matrix=document.getElementById("permissionMatrix");
+  if(matrix) matrix.classList.toggle("readonly",!hasPermission("team.manage"));
+}
+
+async function loadMyPermissions(){
+  staffPermissions=[];
+  if(!staffProfile?.active||!supabaseClient){applyPermissionUI();return}
+  const {data,error}=await supabaseClient.rpc("my_permissions");
+  if(!error && Array.isArray(data)) staffPermissions=data;
+  applyPermissionUI();
+}
+async function loadAssignableStaff(){
+  assignableStaff=[];
+  if(!staffProfile?.active||!supabaseClient) return;
+  if(!hasAnyPermission("work_orders.write_all","team.read")) return;
+  const {data,error}=await supabaseClient.rpc("assignable_staff");
+  if(!error) assignableStaff=data||[];
+}
 
 function isPublicApprovalRequest(){
   const params=new URLSearchParams(location.search);
@@ -125,11 +198,16 @@ async function refreshStaffSession(message=""){
   }
   renderStaffAuthState(message);
   if(staffProfile?.active){
+    await loadMyPermissions();
+    await loadAssignableStaff();
     await syncServerData({quiet:true});
   }else{
+    staffPermissions=[];
+    assignableStaff=[];
     serverDataReady=false;
     serverOrders=[];
     serverClients=[];
+    applyPermissionUI();
   }
   syncInternalAccessGate(message);
 }
@@ -222,6 +300,10 @@ function go(name){
     syncInternalAccessGate();
     return;
   }
+  if(!publicMode && staffProfile?.active && !canView(name)){
+    toast("Seu perfil não tem acesso a esta área.");
+    return;
+  }
   previousView=currentView;
   currentView=name;
   document.body.classList.toggle("public-mode",publicMode);
@@ -229,12 +311,13 @@ function go(name){
   bottom.forEach(b=>b.classList.toggle("active",b.dataset.go===name));
   desktopNav.forEach(b=>b.classList.toggle("active",b.dataset.go===name));
   const moreBtn=document.getElementById("moreNavBtn");
-  if(moreBtn) moreBtn.classList.toggle("active",["stock","mechanic","finance"].includes(name));
+  if(moreBtn) moreBtn.classList.toggle("active",["stock","mechanic","finance","team"].includes(name));
   appBack.hidden=publicMode || ["dashboard","orders","clients"].includes(name);
   window.scrollTo({top:0,behavior:"smooth"});
   if(name==="orders") renderOrders();
   if(name==="clients") renderClients();
   if(name==="finance") renderFinance();
+  if(name==="team") renderTeam();
   if(name==="mechanic") renderMechanic();
   if(name==="stock") renderStock();
   if(name==="budget") renderBudget();
@@ -303,8 +386,15 @@ function shortDateTime(value){
   }catch{return "A definir"}
 }
 function mapServerOrder(row){
-  const customer=row.customers||{};
-  const vehicle=row.vehicles||{};
+  const customer=row.customers||{name:row.customer_name};
+  const vehicle=row.vehicles||{
+    plate:row.plate,
+    make:row.vehicle_make,
+    model:row.vehicle_model,
+    version:row.vehicle_version,
+    year:row.vehicle_year,
+    km:row.vehicle_km
+  };
   const vehicleText=[vehicle.make,vehicle.model,vehicle.version].filter(Boolean).join(" ")||"Veículo a completar";
   const kind=row.status==="ready"?"ready":["approved","in_service"].includes(row.status)?"service":"waiting";
   return {
@@ -324,7 +414,9 @@ function mapServerOrder(row){
     health:serverHealth(row),
     promised:shortDateTime(row.customer_promised_at),
     forecast:shortDateTime(row.forecast_at),
-    owner:"Equipe",
+    owner:row.assigned_name||(String(row.assigned_to||"")===String(staffProfile?.id||"")?staffProfile?.full_name:"Sem responsável"),
+    assignedTo:row.assigned_to||null,
+    assignedName:row.assigned_name||null,
     blockedReason:row.blocked_reason||"",
     blockedSince:row.blocked_since||null,
     nextReview:shortDateTime(row.next_review_at),
@@ -335,19 +427,20 @@ async function syncServerData({quiet=false}={}){
   if(!supabaseClient||!staffProfile?.active||serverSyncing) return false;
   serverSyncing=true;
   try{
-    const {data:rows,error}=await supabaseClient
-      .from("work_orders")
-      .select("id,number,customer_id,vehicle_id,status,complaint,current_km,created_at,customer_promised_at,forecast_at,operational_state,blocked_since,blocked_reason,next_review_at,priority,customers(id,name,phone),vehicles(id,plate,make,model,version,year,km)")
-      .order("created_at",{ascending:false});
+    const {data:rows,error}=await supabaseClient.rpc("work_orders_for_app");
     if(error) throw error;
     serverOrders=(rows||[]).map(mapServerOrder);
 
-    const {data:customers,error:customerError}=await supabaseClient
-      .from("customers")
-      .select("id,name,phone")
-      .order("name",{ascending:true});
-    if(customerError) throw customerError;
-    serverClients=(customers||[]).map(c=>{
+    let customers=[];
+    if(hasPermission("customers.read")){
+      const response=await supabaseClient
+        .from("customers")
+        .select("id,name,phone")
+        .order("name",{ascending:true});
+      if(response.error) throw response.error;
+      customers=response.data||[];
+    }
+    serverClients=customers.map(c=>{
       const related=serverOrders.filter(o=>String(o.customerId)===String(c.id));
       const first=related.find(o=>o.vehicle&&o.vehicle!=="Veículo a completar");
       return {
@@ -974,6 +1067,123 @@ function renderStockRows(){
   }).join(""):'<div class="search-empty">Nenhum item encontrado.</div>';
 }
 document.getElementById("stockSearch")?.addEventListener("input",renderStockRows);
+document.querySelectorAll("[data-permission-role]").forEach(btn=>btn.addEventListener("click",()=>{
+  currentPermissionRole=btn.dataset.permissionRole;
+  document.querySelectorAll("[data-permission-role]").forEach(x=>x.classList.toggle("active",x===btn));
+  renderPermissionMatrix();
+}));
+document.getElementById("refreshTeamBtn")?.addEventListener("click",renderTeam);
+
+function teamStatusLabel(member){
+  if(member.status==="invited") return "Convite pendente";
+  return member.active?"Ativo":"Bloqueado";
+}
+function teamRoleDescription(role){
+  return ({
+    owner:"Acesso total ao sistema.",
+    manager:"Gerencia operação, orçamento e financeiro. Não administra usuários.",
+    reception:"Clientes, OS, vistoria e orçamento. Sem custos internos.",
+    mechanic:"Somente OS atribuídas e evidências técnicas. Sem valores.",
+    finance:"Financeiro, recebíveis e leitura operacional."
+  })[role]||"Perfil interno.";
+}
+function teamMemberCard(member){
+  const initials=(member.full_name||"?").split(/\s+/).slice(0,2).map(x=>x[0]||"").join("").toUpperCase();
+  const actionable=Boolean(member.user_id)&&hasPermission("team.manage");
+  return '<article class="team-member-card '+(member.active?"active":"")+'">'+
+    '<div class="team-avatar">'+escapeHtml(initials)+'</div>'+
+    '<div class="team-member-copy"><b>'+escapeHtml(member.full_name||"Usuário")+'</b><small>'+escapeHtml(member.email||"—")+'</small><span>'+escapeHtml(teamRoleLabel(member.role))+' · '+escapeHtml(teamStatusLabel(member))+'</span></div>'+
+    '<div class="team-member-actions">'+
+      (member.status==="invited"?'<span class="team-pending-badge">aguardando cadastro</span>':
+        actionable?'<button type="button" data-edit-staff="'+member.user_id+'">Gerenciar</button>':'<span>'+escapeHtml(teamRoleDescription(member.role))+'</span>')+
+    '</div>'+
+  '</article>';
+}
+function teamRoleLabel(role){
+  return staffRoleLabel(role);
+}
+async function renderTeam(){
+  const list=document.getElementById("teamList");
+  const matrix=document.getElementById("permissionMatrix");
+  if(!list||!staffProfile?.active||!hasPermission("team.read")) return;
+  list.innerHTML='<div class="search-empty">Carregando equipe…</div>';
+  if(matrix) matrix.innerHTML='<div class="search-empty">Carregando permissões…</div>';
+
+  const [directoryResult,catalogResult,rolesResult]=await Promise.all([
+    supabaseClient.rpc("staff_directory"),
+    supabaseClient.from("permission_catalog").select("permission,category,label,description,sort_order,visible").eq("visible",true).order("sort_order"),
+    supabaseClient.from("role_permissions").select("role,permission,enabled")
+  ]);
+
+  if(directoryResult.error){
+    list.innerHTML='<div class="search-empty">Não foi possível carregar a equipe.</div>';
+    return;
+  }
+  teamDirectory=directoryResult.data||[];
+  permissionCatalog=catalogResult.data||[];
+  rolePermissionRows=rolesResult.data||[];
+
+  document.getElementById("teamActiveCount").textContent=teamDirectory.filter(x=>x.active).length;
+  document.getElementById("teamInviteCount").textContent=teamDirectory.filter(x=>x.status==="invited").length;
+  document.getElementById("teamMechanicCount").textContent=teamDirectory.filter(x=>x.active&&x.role==="mechanic").length;
+
+  list.innerHTML=teamDirectory.length?teamDirectory.map(teamMemberCard).join(""):'<div class="search-empty">Nenhum usuário cadastrado.</div>';
+  list.querySelectorAll("[data-edit-staff]").forEach(btn=>btn.addEventListener("click",()=>openStaffMember(btn.dataset.editStaff)));
+  renderPermissionMatrix();
+}
+function renderPermissionMatrix(){
+  const target=document.getElementById("permissionMatrix");
+  if(!target) return;
+  const enabled=new Set(rolePermissionRows.filter(x=>x.role===currentPermissionRole&&x.enabled).map(x=>x.permission));
+  const groups=new Map();
+  permissionCatalog.forEach(item=>{
+    if(!groups.has(item.category)) groups.set(item.category,[]);
+    groups.get(item.category).push(item);
+  });
+
+  target.innerHTML=[...groups.entries()].map(([category,items])=>
+    '<section class="permission-group"><h3>'+escapeHtml(category)+'</h3>'+
+      items.map(item=>
+        '<label class="permission-row">'+
+          '<input type="checkbox" data-role-permission="'+escapeHtml(item.permission)+'" '+(enabled.has(item.permission)?"checked":"")+' '+(!hasPermission("team.manage")?"disabled":"")+'>'+
+          '<span><b>'+escapeHtml(item.label)+'</b><small>'+escapeHtml(item.description)+'</small></span>'+
+        '</label>'
+      ).join("")+
+    '</section>'
+  ).join("");
+
+  target.querySelectorAll("[data-role-permission]").forEach(input=>input.addEventListener("change",async()=>{
+    const permission=input.dataset.rolePermission;
+    input.disabled=true;
+    const {error}=await supabaseClient.from("role_permissions").upsert({
+      role:currentPermissionRole,
+      permission,
+      enabled:input.checked
+    },{onConflict:"role,permission"});
+    if(error){
+      input.checked=!input.checked;
+      toast("Não foi possível alterar a permissão.");
+    }else{
+      const existing=rolePermissionRows.find(x=>x.role===currentPermissionRole&&x.permission===permission);
+      if(existing) existing.enabled=input.checked;
+      else rolePermissionRows.push({role:currentPermissionRole,permission,enabled:input.checked});
+      toast("Permissão atualizada.");
+    }
+    input.disabled=!hasPermission("team.manage");
+  }));
+}
+function openStaffMember(userId){
+  const member=teamDirectory.find(x=>String(x.user_id)===String(userId));
+  if(!member) return;
+  document.getElementById("staffMemberId").value=member.user_id;
+  document.getElementById("staffMemberTitle").textContent=member.full_name;
+  document.getElementById("staffMemberEmail").textContent=member.email||"—";
+  document.getElementById("staffMemberRole").value=member.role;
+  document.getElementById("staffMemberActive").checked=Boolean(member.active);
+  document.getElementById("staffMemberStatus").textContent=member.active?"ativo":"bloqueado";
+  document.getElementById("staffMemberHint").textContent=teamRoleDescription(member.role);
+  openSheet(staffMemberSheet);
+}
 
 function desktopClientRow(c){
   return '<article class="desktop-client-row" data-client-id="'+c.id+'">'+
@@ -1293,6 +1503,7 @@ function renderOrderDetailInto(detail,o,useDrawer=false){
         '<div class="info-block"><span>Relato do cliente</span><b>'+escapeHtml(o.complaint||"Sem relato inicial")+'</b></div>'+
         '<div class="info-block"><span>Status atual</span><b>'+escapeHtml(o.stage)+'</b></div>'+
         '<div class="info-block"><span>Entrada</span><b>'+escapeHtml(o.opened)+'</b></div>'+
+        '<div class="info-block"><span>Responsável</span><b>'+escapeHtml(o.owner||"Sem responsável")+'</b></div>'+
         '<div class="operational-summary">'+
           '<div><span>Prazo cliente</span><b>'+escapeHtml(o.promised||"A definir")+'</b></div>'+
           '<div><span>Previsão atual</span><b>'+escapeHtml(o.forecast||"A definir")+'</b></div>'+
@@ -2992,6 +3203,16 @@ function openOsQuickSheet(id){
   document.getElementById("osQuickPromised").value=toLocalDateTimeInput(raw.customer_promised_at);
   document.getElementById("osQuickForecast").value=toLocalDateTimeInput(raw.forecast_at);
   document.getElementById("osQuickReason").value=order.blockedReason||"";
+  const assigneeWrap=document.getElementById("osQuickAssigneeWrap");
+  const assigneeSelect=document.getElementById("osQuickAssignee");
+  const canAssign=hasPermission("work_orders.write_all");
+  if(assigneeWrap) assigneeWrap.hidden=!canAssign;
+  if(assigneeSelect && canAssign){
+    assigneeSelect.innerHTML='<option value="">Sem responsável definido</option>'+assignableStaff.map(person=>
+      '<option value="'+person.user_id+'">'+escapeHtml(person.full_name)+' · '+escapeHtml(staffRoleLabel(person.role))+'</option>'
+    ).join("");
+    assigneeSelect.value=order.assignedTo||"";
+  }
   openSheet(osQuickSheet);
 }
 document.querySelectorAll("[data-os-state]").forEach(btn=>btn.addEventListener("click",()=>setQuickState(btn.dataset.osState)));
@@ -3019,6 +3240,10 @@ async function saveOsQuickUpdate(){
     };
     if(promisedValue) patch.customer_promised_at=new Date(promisedValue).toISOString();
     if(forecastValue) patch.forecast_at=new Date(forecastValue).toISOString();
+    if(hasPermission("work_orders.write_all")){
+      const assigned=document.getElementById("osQuickAssignee")?.value||null;
+      patch.assigned_to=assigned;
+    }
     if(osQuickSelectedState==="ready") patch.status="ready";
     else if(osQuickSelectedState==="active" && raw.status==="ready") patch.status="in_service";
 
@@ -3037,7 +3262,8 @@ async function saveOsQuickUpdate(){
           status:patch.status||raw.status||null,
           customer_promised_at:patch.customer_promised_at||raw.customer_promised_at||null,
           forecast_at:patch.forecast_at||raw.forecast_at||null,
-          reason:patch.blocked_reason
+          reason:patch.blocked_reason,
+          assigned_to:patch.assigned_to??raw.assigned_to??null
         }
       });
       await syncServerData({quiet:true});
@@ -3132,16 +3358,18 @@ const quickActionSheet=document.getElementById("quickActionSheet");
 const moreSheet=document.getElementById("moreSheet");
 const searchSheet=document.getElementById("searchSheet");
 const staffAuthSheet=document.getElementById("staffAuthSheet");
+const staffInviteSheet=document.getElementById("staffInviteSheet");
+const staffMemberSheet=document.getElementById("staffMemberSheet");
 
 function openSheet(sheet){
   if(!sheet) return;
-  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,staffAuthSheet,pixPaymentSheet,osQuickSheet,budgetItemSheet,budgetSendSheet].forEach(s=>{if(s && s!==sheet)s.hidden=true});
+  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,staffAuthSheet,pixPaymentSheet,osQuickSheet,budgetItemSheet,budgetSendSheet,staffInviteSheet,staffMemberSheet].forEach(s=>{if(s && s!==sheet)s.hidden=true});
   sheet.hidden=false;
   document.body.classList.add("sheet-open");
   document.body.classList.remove("no-scroll");
 }
 function closeSheets(){
-  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,staffAuthSheet,pixPaymentSheet,osQuickSheet,budgetItemSheet,budgetSendSheet].forEach(s=>{if(s)s.hidden=true});
+  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,staffAuthSheet,pixPaymentSheet,osQuickSheet,budgetItemSheet,budgetSendSheet,staffInviteSheet,staffMemberSheet].forEach(s=>{if(s)s.hidden=true});
   document.body.classList.remove("sheet-open");
   queueScrollLock();
 }
@@ -3154,9 +3382,62 @@ document.getElementById("internalAccessGateBtn")?.addEventListener("click",()=>o
 document.getElementById("staffAccessShortcut")?.addEventListener("click",()=>{closeSheets();openSheet(staffAuthSheet)});
 document.getElementById("staffLoginBtn")?.addEventListener("click",staffLogin);
 document.getElementById("staffSignupBtn")?.addEventListener("click",staffSignup);
+document.getElementById("inviteStaffBtn")?.addEventListener("click",()=>{
+  if(!hasPermission("team.manage")) return toast("Somente o proprietário pode convidar usuários.");
+  document.getElementById("staffInviteForm")?.reset();
+  openSheet(staffInviteSheet);
+});
+document.getElementById("staffInviteForm")?.addEventListener("submit",async event=>{
+  event.preventDefault();
+  if(!hasPermission("team.manage")) return;
+  const form=event.currentTarget;
+  const fd=new FormData(form);
+  const submit=form.querySelector('button[type="submit"]');
+  submit.disabled=true;
+  try{
+    const {error}=await supabaseClient.rpc("create_staff_invite",{
+      p_email:String(fd.get("email")||"").trim(),
+      p_full_name:String(fd.get("full_name")||"").trim(),
+      p_role:String(fd.get("role")||"mechanic"),
+      p_expires_days:30
+    });
+    if(error) throw error;
+    closeSheets();
+    await renderTeam();
+    toast("Convite criado. A pessoa já pode criar a própria senha.");
+  }catch{
+    toast("Não foi possível criar o convite.");
+  }finally{submit.disabled=false}
+});
+document.getElementById("staffMemberRole")?.addEventListener("change",event=>{
+  const hint=document.getElementById("staffMemberHint");
+  if(hint) hint.textContent=teamRoleDescription(event.target.value);
+});
+document.getElementById("staffMemberForm")?.addEventListener("submit",async event=>{
+  event.preventDefault();
+  if(!hasPermission("team.manage")) return;
+  const userId=document.getElementById("staffMemberId").value;
+  const role=document.getElementById("staffMemberRole").value;
+  const active=document.getElementById("staffMemberActive").checked;
+  const submit=document.getElementById("saveStaffMember");
+  submit.disabled=true;
+  try{
+    const {error}=await supabaseClient.rpc("manage_staff_member",{p_user_id:userId,p_role:role,p_active:active});
+    if(error){
+      if(String(error.message||"").includes("last_owner_protected")) toast("Não é possível remover o último proprietário ativo.");
+      else toast("Não foi possível salvar o acesso.");
+      return;
+    }
+    closeSheets();
+    await renderTeam();
+    await loadAssignableStaff();
+    toast("Acesso atualizado.");
+  }finally{submit.disabled=false}
+});
 document.getElementById("staffLogoutBtn")?.addEventListener("click",async()=>{
   await supabaseClient?.auth.signOut();
-  staffSession=null;staffProfile=null;
+  staffSession=null;staffProfile=null;staffPermissions=[];assignableStaff=[];
+  applyPermissionUI();
   renderStaffAuthState("Sessão encerrada. Entre novamente para acessar a oficina.");
 });
 supabaseClient?.auth.onAuthStateChange(()=>setTimeout(()=>refreshStaffSession(),0));
