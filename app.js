@@ -3871,6 +3871,185 @@ function closeSheets(){
   queueScrollLock();
 }
 document.querySelectorAll("[data-close-sheet]").forEach(btn=>btn.addEventListener("click",closeSheets));
+
+let deliverySelectedOrderId=null;
+let deliveryExistingSlots=new Set();
+let deliverySelectedSlots=new Set();
+const deliveryRequiredSlots=["front","rear","left","right"];
+
+function updateDeliveryProgress(){
+  const completed=new Set([...deliveryExistingSlots,...deliverySelectedSlots]);
+  const count=deliveryRequiredSlots.filter(slot=>completed.has(slot)).length;
+  const label=document.getElementById("deliveryPhotoLabel");
+  const bar=document.getElementById("deliveryProgressBar");
+  const submit=document.getElementById("deliverySubmit");
+  if(label) label.textContent=count+" de 4 obrigatórias";
+  if(bar) bar.style.width=(count/4*100)+"%";
+  if(submit) submit.disabled=count!==4;
+}
+
+function resetDeliveryForm(){
+  deliveryExistingSlots=new Set();
+  deliverySelectedSlots=new Set();
+  document.getElementById("deliveryForm")?.reset();
+  document.querySelectorAll(".delivery-photo-card").forEach(card=>{
+    card.classList.remove("captured");
+    const input=card.querySelector("input");
+    if(input){input.disabled=false;input.required=true}
+    const preview=card.querySelector(".delivery-photo-preview");
+    if(preview) preview.innerHTML="📷";
+    const small=card.querySelector("small");
+    if(small) small.textContent="obrigatória";
+  });
+  document.getElementById("deliveryStatus").textContent="A OS precisa estar como Pronta e todas as peças devem estar resolvidas.";
+  updateDeliveryProgress();
+}
+
+async function loadExistingDeliveryInspection(orderId){
+  const {data,error}=await supabaseClient
+    .from("inspection_photos")
+    .select("slot")
+    .eq("work_order_id",orderId)
+    .eq("phase","exit")
+    .eq("required",true);
+  if(error) throw error;
+  deliveryExistingSlots=new Set((data||[]).map(row=>row.slot).filter(slot=>deliveryRequiredSlots.includes(slot)));
+  document.querySelectorAll(".delivery-photo-card").forEach(card=>{
+    const slot=card.dataset.deliverySlot;
+    if(!deliveryExistingSlots.has(slot)) return;
+    card.classList.add("captured");
+    const input=card.querySelector("input");
+    if(input){input.disabled=true;input.required=false}
+    const preview=card.querySelector(".delivery-photo-preview");
+    if(preview) preview.innerHTML="✓";
+    const small=card.querySelector("small");
+    if(small) small.textContent="já registrada";
+  });
+  updateDeliveryProgress();
+}
+
+async function openDeliverySheet(id){
+  const order=allOrders().find(o=>String(o.id)===String(id));
+  if(!order) return toast("OS não encontrada.");
+  if(!(order.server&&staffProfile?.active&&supabaseClient)) return toast("A entrega precisa ser registrada no servidor.");
+  if(!hasPermission("work_orders.write_all")) return toast("Seu perfil não pode concluir a entrega.");
+  if(String(order.raw?.status||"").toLowerCase()!=="ready") return toast("A OS precisa estar como Pronta antes da entrega.");
+
+  deliverySelectedOrderId=order.id;
+  resetDeliveryForm();
+  document.getElementById("deliveryOrderRef").textContent=order.ref;
+  document.getElementById("deliveryStatus").textContent="Carregando vistoria de saída…";
+  openSheet(deliverySheet);
+  try{
+    await loadExistingDeliveryInspection(order.id);
+    document.getElementById("deliveryStatus").textContent=deliveryExistingSlots.size
+      ?"As fotos já registradas foram preservadas. Complete o que faltar e confirme a entrega."
+      :"Faça as quatro fotos de saída para liberar a confirmação.";
+  }catch(error){
+    document.getElementById("deliveryStatus").textContent="Não foi possível verificar as fotos de saída.";
+  }
+}
+
+document.querySelectorAll(".delivery-photo-card input").forEach(input=>input.addEventListener("change",()=>{
+  const card=input.closest(".delivery-photo-card");
+  const file=input.files?.[0];
+  if(!card||!file) return;
+  const slot=card.dataset.deliverySlot;
+  deliverySelectedSlots.add(slot);
+  card.classList.add("captured");
+  const preview=card.querySelector(".delivery-photo-preview");
+  if(preview){
+    const old=preview.querySelector("img");
+    if(old?.src?.startsWith("blob:")) URL.revokeObjectURL(old.src);
+    preview.innerHTML='<img alt="'+slot+'">';
+    preview.querySelector("img").src=URL.createObjectURL(file);
+  }
+  const small=card.querySelector("small");
+  if(small) small.textContent="pronta para enviar";
+  updateDeliveryProgress();
+}));
+
+async function uploadDeliveryPhotos(orderId){
+  const rows=[];
+  for(const card of document.querySelectorAll(".delivery-photo-card")){
+    const slot=card.dataset.deliverySlot;
+    if(deliveryExistingSlots.has(slot)) continue;
+    const input=card.querySelector("input");
+    const file=input?.files?.[0];
+    if(!file) continue;
+    const ext=(file.name.split(".").pop()||"jpg").toLowerCase().replace(/[^a-z0-9]/g,"")||"jpg";
+    const storagePath=orderId+"/exit/"+slot+"-"+crypto.randomUUID()+"."+ext;
+    const {error:uploadError}=await supabaseClient.storage
+      .from("oficina-evidence")
+      .upload(storagePath,file,{contentType:file.type||"image/jpeg",upsert:false});
+    if(uploadError) throw uploadError;
+    rows.push({
+      work_order_id:orderId,
+      phase:"exit",
+      slot,
+      storage_path:storagePath,
+      required:true
+    });
+  }
+  if(rows.length){
+    const {error}=await supabaseClient.from("inspection_photos").insert(rows);
+    if(error) throw error;
+    rows.forEach(row=>deliveryExistingSlots.add(row.slot));
+  }
+  updateDeliveryProgress();
+}
+
+document.getElementById("deliveryForm")?.addEventListener("submit",async event=>{
+  event.preventDefault();
+  const orderId=deliverySelectedOrderId;
+  if(!orderId) return;
+  const completed=new Set([...deliveryExistingSlots,...deliverySelectedSlots]);
+  if(deliveryRequiredSlots.some(slot=>!completed.has(slot))) return toast("Faça as quatro fotos de saída.");
+
+  const kmRaw=String(document.getElementById("deliveryFinalKm").value||"").replace(/\D/g,"");
+  const finalKm=kmRaw?parseInt(kmRaw,10):null;
+  const submit=document.getElementById("deliverySubmit");
+  const status=document.getElementById("deliveryStatus");
+  submit.disabled=true;
+  status.textContent="Enviando vistoria de saída…";
+
+  try{
+    await uploadDeliveryPhotos(orderId);
+    status.textContent="Conferindo peças e concluindo a entrega…";
+    const {data,error}=await supabaseClient.rpc("complete_work_order_delivery",{
+      p_work_order_id:orderId,
+      p_final_km:Number.isFinite(finalKm)?finalKm:null
+    });
+    if(error) throw error;
+
+    await syncServerData({quiet:true});
+    closeSheets();
+    renderDashboard();
+    renderOrders();
+    renderClients();
+    if(document.body.classList.contains("desktop-drawer-open")) closeDesktopOsDrawer();
+    if(currentView==="detail") openDetail(orderId,true);
+    toast(data?.already_delivered?"Entrega já estava registrada.":"Veículo entregue e OS encerrada.");
+  }catch(error){
+    const message=String(error?.message||error||"");
+    if(message.includes("unresolved_stock_reservations")){
+      status.textContent="Ainda há peças pendentes. Na aba Peças, marque cada item como Instalar ou Liberar antes da entrega.";
+    }else if(message.includes("exit_inspection_incomplete")){
+      status.textContent="A vistoria de saída ainda está incompleta.";
+    }else if(message.includes("work_order_not_ready")){
+      status.textContent="A OS não está mais como Pronta. Atualize o andamento antes de entregar.";
+    }else if(message.includes("not_allowed")){
+      status.textContent="Seu perfil não possui permissão para concluir a entrega.";
+    }else if(message.includes("invalid_final_km")){
+      status.textContent="Confira a quilometragem informada.";
+    }else{
+      status.textContent="Não foi possível concluir a entrega. As fotos já enviadas serão preservadas para a próxima tentativa.";
+    }
+  }finally{
+    updateDeliveryProgress();
+  }
+});
+
 document.getElementById("quickActionBtn")?.addEventListener("click",()=>openSheet(quickActionSheet));
 document.getElementById("moreNavBtn")?.addEventListener("click",()=>openSheet(moreSheet));
 document.getElementById("authStatusBtn")?.addEventListener("click",()=>openSheet(staffAuthSheet));
