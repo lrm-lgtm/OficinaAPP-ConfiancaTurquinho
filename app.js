@@ -91,7 +91,7 @@ function applyPermissionUI(){
     document.querySelectorAll(selector).forEach(el=>el.hidden=!visible);
   };
   setVisible("#newClientBtn,[data-sheet-client]",hasPermission("customers.write"));
-  setVisible("#financeReceiptShortcut,#financeExpenseShortcut",hasPermission("finance.write"));
+  setVisible("#financeReceiptShortcut,#financeExpenseShortcut,#openPixPayment",hasPermission("finance.write"));
   setVisible("#addBudgetItem,#newBudgetRevision",hasPermission("budgets.write"));
   setVisible("#copyApproval",hasPermission("budgets.send"));
   setVisible("#inviteStaffBtn",hasPermission("team.manage"));
