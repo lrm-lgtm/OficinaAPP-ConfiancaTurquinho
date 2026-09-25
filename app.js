@@ -1952,7 +1952,7 @@ async function loadInspectionPhotosInto(order,target){
     .from("inspection_photos")
     .select("id,slot,phase,storage_path,required,created_at")
     .eq("work_order_id",order.id)
-    .eq("phase","entry")
+    .in("phase",["entry","exit"])
     .order("created_at",{ascending:true});
   if(error){
     target.innerHTML='<div class="inspection-loading">Não foi possível carregar as fotos.</div>';
@@ -1965,18 +1965,28 @@ async function loadInspectionPhotosInto(order,target){
     rows.push({...photo,url:signed?.signedUrl||""});
   }
 
-  const requiredCount=rows.filter(x=>x.required).length;
   const slotLabel={front:"Frente",rear:"Traseira",left:"Lateral esquerda",right:"Lateral direita",panel:"Painel / km",other:"Outro"};
+  const requiredSlots=["front","rear","left","right"];
+  const phaseBlock=(phase,title,emptyText)=>{
+    const phaseRows=rows.filter(x=>x.phase===phase);
+    const requiredCount=new Set(phaseRows.filter(x=>x.required&&requiredSlots.includes(x.slot)).map(x=>x.slot)).size;
+    return '<section class="inspection-phase-block">'+
+      '<div class="info-block"><span>'+title+'</span><b>'+requiredCount+' de 4 obrigatórias registradas</b></div>'+
+      (phaseRows.length
+        ? '<div class="evidence-grid">'+phaseRows.map(photo=>
+            '<button class="evidence-photo" type="button" data-evidence-url="'+escapeHtml(photo.url)+'">'+
+              (photo.url?'<img src="'+escapeHtml(photo.url)+'" alt="'+escapeHtml(slotLabel[photo.slot]||photo.slot)+'">':'<div class="evidence-missing">Sem prévia</div>')+
+              '<span>'+escapeHtml(slotLabel[photo.slot]||photo.slot)+'</span>'+
+            '</button>'
+          ).join("")+'</div>'
+        : '<div class="inspection-loading">'+emptyText+'</div>')+
+    '</section>';
+  };
+
+  const showExit=rows.some(x=>x.phase==="exit") || ["ready","delivered"].includes(String(order.raw?.status||"").toLowerCase());
   target.innerHTML=
-    '<div class="info-block"><span>Vistoria de entrada</span><b>'+requiredCount+' de 4 obrigatórias registradas</b></div>'+
-    (rows.length
-      ? '<div class="evidence-grid">'+rows.map(photo=>
-          '<button class="evidence-photo" type="button" data-evidence-url="'+escapeHtml(photo.url)+'">'+
-            (photo.url?'<img src="'+escapeHtml(photo.url)+'" alt="'+escapeHtml(slotLabel[photo.slot]||photo.slot)+'">':'<div class="evidence-missing">Sem prévia</div>')+
-            '<span>'+escapeHtml(slotLabel[photo.slot]||photo.slot)+'</span>'+
-          '</button>'
-        ).join("")+'</div>'
-      : '<div class="inspection-loading">Nenhuma foto registrada nesta OS.</div>');
+    phaseBlock("entry","Vistoria de entrada","Nenhuma foto de entrada registrada nesta OS.")+
+    (showExit?phaseBlock("exit","Vistoria de saída","Ainda não há fotos de saída. Use Registrar entrega para concluir a vistoria."):"");
 
   target.querySelectorAll("[data-evidence-url]").forEach(btn=>btn.addEventListener("click",()=>{
     const url=btn.dataset.evidenceUrl;
