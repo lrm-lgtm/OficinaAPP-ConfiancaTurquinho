@@ -7,7 +7,7 @@
   <meta name="description" content="Auto Mecânica Confiança — gestão de oficina">
   <title>Auto Mecânica Confiança</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=14.0">
+  <link rel="stylesheet" href="./styles.css?v=14.1">
 </head>
 <body>
   <header class="appbar">
@@ -349,10 +349,11 @@
     <section class="view internal-only desktop-workspace" data-view="finance">
       <div class="page-title"><div><span>Somente interno</span><h1>Financeiro</h1></div><span class="status open">Privado</span></div>
 
-      <div class="finance-kpis">
+      <div class="finance-kpis finance-kpis-v141">
         <article><span>A receber</span><b id="financeReceivableTotal">R$ 0,00</b><small id="financeReceivableMeta">—</small></article>
+        <article><span>Vencido</span><b id="financeOverdueTotal">R$ 0,00</b><small id="financeOverdueMeta">—</small></article>
         <article><span>A pagar</span><b id="financePayableTotal">R$ 0,00</b><small>despesas abertas</small></article>
-        <article><span>Resultado</span><b id="financeResultTotal">R$ 0,00</b><small>estimado</small></article>
+        <article><span>Recebido no mês</span><b id="financeReceivedMonth">R$ 0,00</b><small id="financeReceivedMeta">—</small></article>
       </div>
 
       <div class="finance-actions">
@@ -362,8 +363,16 @@
 
       <div class="privacy-chip">🔒 Custos, margem e notas nunca aparecem para o cliente.</div>
 
-      <div class="section-head compact"><h2>Movimentos recentes</h2><button type="button" id="financeFilterBtn">Todos</button></div>
-      <div class="finance-list" id="financeList"></div>
+      <div class="finance-tabs" id="financeTabs">
+        <button class="active" data-finance-tab="overview">Resumo</button>
+        <button data-finance-tab="receivables">A receber</button>
+        <button data-finance-tab="credit">Crediário</button>
+        <button data-finance-tab="payables">A pagar</button>
+        <button data-finance-tab="movements">Movimentos</button>
+      </div>
+
+      <div class="section-head compact"><div><h2 id="financeListTitle">Visão financeira</h2><small id="financeListSubtitle">Pendências que pedem atenção</small></div><button type="button" id="financeRefreshBtn">Atualizar</button></div>
+      <div class="finance-list finance-list-v141" id="financeList"></div>
     </section>
   </main>
 
@@ -548,6 +557,61 @@
     </div>
   </div>
 
+  <div class="sheet" id="manualPaymentSheet" hidden>
+    <button class="sheet-backdrop" data-close-sheet aria-label="Fechar"></button>
+    <div class="sheet-card finance-sheet-card">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title-row"><div><small>Contas a receber</small><h2>Registrar recebimento</h2></div><span class="private-badge">interno</span></div>
+      <div class="finance-settlement-summary">
+        <div><span id="manualPaymentRef">OS</span><b id="manualPaymentCustomer">Cliente</b></div>
+        <strong id="manualPaymentRemaining">R$ 0,00</strong>
+      </div>
+      <form id="manualPaymentForm" class="finance-form">
+        <input type="hidden" id="manualPaymentReceivableId">
+        <label>Valor recebido<input id="manualPaymentAmount" inputmode="decimal" required></label>
+        <label>Forma de pagamento
+          <select id="manualPaymentMethod">
+            <option value="pix">Pix</option>
+            <option value="cash">Dinheiro</option>
+            <option value="debit_card">Cartão de débito</option>
+            <option value="credit_card">Cartão de crédito</option>
+            <option value="transfer">Transferência</option>
+            <option value="other">Outro</option>
+          </select>
+        </label>
+        <label>Observação interna<textarea id="manualPaymentNote" rows="2" placeholder="Ex.: entrada parcial, recebido no balcão..."></textarea></label>
+        <div class="provider-status">Aceita pagamento parcial. O saldo restante continua em aberto.</div>
+        <button class="btn primary full" type="submit">Confirmar recebimento</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="sheet" id="settleExpenseSheet" hidden>
+    <button class="sheet-backdrop" data-close-sheet aria-label="Fechar"></button>
+    <div class="sheet-card finance-sheet-card">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title-row"><div><small>Contas a pagar</small><h2>Baixar despesa</h2></div><span class="private-badge">interno</span></div>
+      <div class="finance-settlement-summary">
+        <div><span id="settleExpenseCategory">Despesa</span><b id="settleExpenseDescription">—</b></div>
+        <strong id="settleExpenseAmount">R$ 0,00</strong>
+      </div>
+      <form id="settleExpenseForm" class="finance-form">
+        <input type="hidden" id="settleExpenseId">
+        <label>Forma de pagamento
+          <select id="settleExpenseMethod">
+            <option value="pix">Pix</option>
+            <option value="cash">Dinheiro</option>
+            <option value="debit_card">Cartão de débito</option>
+            <option value="credit_card">Cartão de crédito</option>
+            <option value="transfer">Transferência</option>
+            <option value="other">Outro</option>
+          </select>
+        </label>
+        <button class="btn primary full" type="submit">Marcar como paga</button>
+      </form>
+    </div>
+  </div>
+
   <div class="sheet" id="financeReceiptSheet" hidden>
     <button class="sheet-backdrop" data-close-sheet aria-label="Fechar"></button>
     <div class="sheet-card finance-sheet-card">
@@ -700,6 +764,6 @@
 
   <div class="toast" id="toast"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./app.js?v=14.0"></script>
+  <script src="./app.js?v=14.1"></script>
 </body>
 </html>
