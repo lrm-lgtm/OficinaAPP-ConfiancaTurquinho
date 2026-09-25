@@ -7,7 +7,7 @@
   <meta name="description" content="Auto Mecânica Confiança — gestão de oficina">
   <title>Auto Mecânica Confiança</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=15.4">
+  <link rel="stylesheet" href="./styles.css?v=15.5">
 </head>
 <body>
   <header class="appbar">
@@ -820,6 +820,25 @@
     </div>
   </div>
 
+  <div class="sheet" id="cancelWorkOrderSheet" hidden>
+    <button class="sheet-backdrop" data-close-sheet aria-label="Fechar"></button>
+    <div class="sheet-card cancel-os-sheet-card">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title-row">
+        <div><small>Encerramento</small><h2>Cancelar ordem de serviço</h2></div>
+        <span class="private-badge" id="cancelWorkOrderRef">OS</span>
+      </div>
+      <div class="provider-status">O cancelamento libera reservas e fecha cobranças ainda não pagas. Se já houver peça instalada, valor recebido ou Pix ativo, o sistema bloqueia para conferência manual.</div>
+      <form id="cancelWorkOrderForm" class="finance-form">
+        <label>Motivo do cancelamento
+          <textarea id="cancelWorkOrderReason" rows="4" required minlength="5" placeholder="Ex.: cliente desistiu antes do início do serviço"></textarea>
+        </label>
+        <div class="provider-status" id="cancelWorkOrderStatus">Nenhuma baixa física ou estorno financeiro será feito automaticamente.</div>
+        <button class="btn cancel-danger full" type="submit" id="cancelWorkOrderSubmit">Cancelar esta OS</button>
+      </form>
+    </div>
+  </div>
+
   <div class="sheet" id="staffInviteSheet" hidden>
     <button class="sheet-backdrop" data-close-sheet aria-label="Fechar"></button>
     <div class="sheet-card team-sheet-card">
@@ -897,6 +916,6 @@
 
   <div class="toast" id="toast"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./app.js?v=15.4"></script>
+  <script src="./app.js?v=15.5"></script>
 </body>
 </html>

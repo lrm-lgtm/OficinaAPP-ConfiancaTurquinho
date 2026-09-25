@@ -3527,3 +3527,9 @@ body.sheet-open .internal-access-gate{
 }
 
 .inspection-phase-block+.inspection-phase-block{margin-top:16px;padding-top:10px;border-top:1px solid var(--line)}
+
+/* ===== v15.5 safe cancellation ===== */
+.cancel-os-sheet-card{max-width:620px}
+.btn.cancel-danger{background:var(--danger);color:#fff;border:1px solid var(--danger);font-weight:900}
+.btn.cancel-outline{background:transparent;color:#ff8d87;border:1px solid rgba(231,75,69,.42);margin-top:8px}
+.btn.cancel-outline:hover{border-color:var(--danger)}

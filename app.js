@@ -689,7 +689,8 @@ function historyLabel(eventType){
     stock_movement_recorded:"Movimentação de estoque",
     reserved_part_consumed:"Peça instalada",
     reserved_part_released:"Reserva de peça liberada",
-    work_order_delivered:"Veículo entregue"
+    work_order_delivered:"Veículo entregue",
+    work_order_cancelled:"OS cancelada"
   })[eventType]||"Atualização da OS";
 }
 function historyDetail(row){
@@ -713,6 +714,7 @@ function historyDetail(row){
   if(row.event_type==="reserved_part_consumed") return Number(p.quantity||0).toLocaleString("pt-BR")+" unidade(s)";
   if(row.event_type==="reserved_part_released") return Number(p.quantity||0).toLocaleString("pt-BR")+" unidade(s)";
   if(row.event_type==="work_order_delivered") return (p.final_km?"Saída: "+Number(p.final_km).toLocaleString("pt-BR")+" km · ":"")+"vistoria de saída concluída.";
+  if(row.event_type==="work_order_cancelled") return String(p.reason||"Cancelamento registrado.")+(Number(p.released_quantity||0)>0?" · reserva liberada: "+Number(p.released_quantity).toLocaleString("pt-BR"):"");
   return p.inspection?"Vistoria de entrada registrada.":"";
 }
 async function loadOrderHistory(order){
@@ -1928,6 +1930,7 @@ function renderOrderDetailInto(detail,o,useDrawer=false){
         (o.blockedReason?'<div class="info-block operational-alert"><span>Motivo / bloqueio</span><b>'+escapeHtml(o.blockedReason)+'</b></div>':'')+
         (String(o.raw?.status||"").toLowerCase()==="ready"&&hasPermission("work_orders.write_all")?'<button class="btn success full" data-deliver-os>✓ Registrar entrega do veículo</button>':'')+
         (o.quick?'<button class="btn primary full" data-complete-entry>Completar cadastro e vistoria</button>':'')+
+        (!isClosedOrder(o)&&hasPermission("work_orders.write_all")?'<button class="btn cancel-outline full" data-cancel-os>Cancelar OS</button>':'')+
       '</section>'+
       '<section class="tab-pane" data-pane="inspection"><div class="os-inspection-content"><div class="inspection-loading">Carregando evidências…</div></div></section>'+
       '<section class="tab-pane" data-pane="estimate"><div class="info-block"><span>Orçamento</span><b>'+(o.status==="Em orçamento"?"Aguardando aprovação":"Disponível para consulta/edição")+'</b></div><div class="info-block"><span>Acesso rápido</span><b>Abra o orçamento sem perder o contexto desta OS.</b></div></section>'+
@@ -1948,6 +1951,7 @@ function renderOrderDetailInto(detail,o,useDrawer=false){
 
   detail.querySelector("[data-update-progress]")?.addEventListener("click",()=>openOsQuickSheet(o.id));
   detail.querySelector("[data-deliver-os]")?.addEventListener("click",()=>openDeliverySheet(o.id));
+  detail.querySelector("[data-cancel-os]")?.addEventListener("click",()=>openCancelWorkOrderSheet(o.id));
   detail.querySelector("[data-open-budget]")?.addEventListener("click",()=>{
     selectedBudgetOrderId=o.id;
     if(useDrawer) closeDesktopOsDrawer();
@@ -4021,20 +4025,90 @@ const staffAuthSheet=document.getElementById("staffAuthSheet");
 const staffInviteSheet=document.getElementById("staffInviteSheet");
 const staffMemberSheet=document.getElementById("staffMemberSheet");
 const deliverySheet=document.getElementById("deliverySheet");
+const cancelWorkOrderSheet=document.getElementById("cancelWorkOrderSheet");
 
 function openSheet(sheet){
   if(!sheet) return;
-  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,manualPaymentSheet,settleExpenseSheet,reservedPartSheet,stockMovementSheet,deliverySheet,staffAuthSheet,pixPaymentSheet,osQuickSheet,budgetItemSheet,budgetSendSheet,staffInviteSheet,staffMemberSheet].forEach(s=>{if(s && s!==sheet)s.hidden=true});
+  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,manualPaymentSheet,settleExpenseSheet,reservedPartSheet,stockMovementSheet,deliverySheet,cancelWorkOrderSheet,staffAuthSheet,pixPaymentSheet,osQuickSheet,budgetItemSheet,budgetSendSheet,staffInviteSheet,staffMemberSheet].forEach(s=>{if(s && s!==sheet)s.hidden=true});
   sheet.hidden=false;
   document.body.classList.add("sheet-open");
   document.body.classList.remove("no-scroll");
 }
 function closeSheets(){
-  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,manualPaymentSheet,settleExpenseSheet,reservedPartSheet,stockMovementSheet,deliverySheet,staffAuthSheet,pixPaymentSheet,osQuickSheet,budgetItemSheet,budgetSendSheet,staffInviteSheet,staffMemberSheet].forEach(s=>{if(s)s.hidden=true});
+  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,manualPaymentSheet,settleExpenseSheet,reservedPartSheet,stockMovementSheet,deliverySheet,cancelWorkOrderSheet,staffAuthSheet,pixPaymentSheet,osQuickSheet,budgetItemSheet,budgetSendSheet,staffInviteSheet,staffMemberSheet].forEach(s=>{if(s)s.hidden=true});
   document.body.classList.remove("sheet-open");
   queueScrollLock();
 }
 document.querySelectorAll("[data-close-sheet]").forEach(btn=>btn.addEventListener("click",closeSheets));
+
+let cancelWorkOrderSelectedId=null;
+
+function openCancelWorkOrderSheet(id){
+  const order=allOrders().find(o=>String(o.id)===String(id));
+  if(!order) return toast("OS não encontrada.");
+  if(isClosedOrder(order)) return toast("Esta OS já está encerrada.");
+  if(!(order.server&&staffProfile?.active&&supabaseClient)) return toast("O cancelamento precisa ser registrado no servidor.");
+  if(!hasPermission("work_orders.write_all")) return toast("Seu perfil não pode cancelar uma OS.");
+
+  cancelWorkOrderSelectedId=order.id;
+  document.getElementById("cancelWorkOrderRef").textContent=order.ref+" · "+order.plate;
+  document.getElementById("cancelWorkOrderReason").value="";
+  document.getElementById("cancelWorkOrderStatus").textContent="Nenhuma baixa física ou estorno financeiro será feito automaticamente.";
+  document.getElementById("cancelWorkOrderSubmit").disabled=false;
+  openSheet(cancelWorkOrderSheet);
+  setTimeout(()=>document.getElementById("cancelWorkOrderReason")?.focus(),80);
+}
+
+document.getElementById("cancelWorkOrderForm")?.addEventListener("submit",async event=>{
+  event.preventDefault();
+  const orderId=cancelWorkOrderSelectedId;
+  const reason=document.getElementById("cancelWorkOrderReason").value.trim();
+  const status=document.getElementById("cancelWorkOrderStatus");
+  const submit=document.getElementById("cancelWorkOrderSubmit");
+  if(!orderId) return;
+  if(reason.length<5){
+    status.textContent="Informe um motivo claro para o cancelamento.";
+    return;
+  }
+
+  submit.disabled=true;
+  status.textContent="Conferindo estoque, financeiro e cobranças…";
+  try{
+    const drawerWasOpen=document.body.classList.contains("desktop-drawer-open");
+    const {data,error}=await supabaseClient.rpc("cancel_work_order",{
+      p_work_order_id:orderId,
+      p_reason:reason
+    });
+    if(error) throw error;
+
+    await syncServerData({quiet:true});
+    closeSheets();
+    renderDashboard();
+    renderOrders();
+    if(drawerWasOpen) openDetail(orderId);
+    else if(currentView==="detail") openDetail(orderId,true);
+    toast(data?.already_cancelled?"A OS já estava cancelada.":"OS cancelada com segurança.");
+  }catch(error){
+    const message=String(error?.message||error||"");
+    if(message.includes("cancel_requires_stock_adjustment")){
+      status.textContent="Há peça já instalada/baixada. Faça o acerto ou devolução de estoque antes de cancelar.";
+    }else if(message.includes("cancel_requires_financial_adjustment")){
+      status.textContent="Já existe valor recebido. O cancelamento precisa de acerto financeiro antes de encerrar a OS.";
+    }else if(message.includes("cancel_has_active_payment_request")){
+      status.textContent="Existe uma cobrança eletrônica ativa. Cancele/expire essa cobrança antes de cancelar a OS.";
+    }else if(message.includes("delivered_work_order_cannot_cancel")){
+      status.textContent="Uma OS já entregue não pode ser cancelada por este fluxo.";
+    }else if(message.includes("cancel_reason_required")){
+      status.textContent="Informe um motivo claro para o cancelamento.";
+    }else if(message.includes("not_allowed")){
+      status.textContent="Seu perfil não possui permissão para cancelar esta OS.";
+    }else{
+      status.textContent="Não foi possível cancelar. Nenhuma alteração parcial foi mantida.";
+    }
+  }finally{
+    submit.disabled=false;
+  }
+});
 
 let deliverySelectedOrderId=null;
 let deliveryExistingSlots=new Set();
