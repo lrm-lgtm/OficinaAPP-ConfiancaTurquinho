@@ -20,7 +20,7 @@ declare
   released_total numeric:=0;
   released_rows integer:=0;
   cancelled_receivables integer:=0;
-  r record;
+  reservation_row record;
 begin
   if not private.has_permission('work_orders.write_all') then
     raise exception 'not_allowed' using errcode='42501';
@@ -57,7 +57,7 @@ begin
   end if;
 
   select greatest(
-    coalesce((select sum(r.paid_amount) from public.receivables r where r.work_order_id=w.id),0),
+    coalesce((select sum(recv.paid_amount) from public.receivables recv where recv.work_order_id=w.id),0),
     coalesce((select sum(p.amount) from public.payments p where p.work_order_id=w.id and p.status='approved'),0)
   ) into received_total;
 
@@ -74,7 +74,7 @@ begin
     raise exception 'cancel_has_active_payment_request';
   end if;
 
-  for r in
+  for reservation_row in
     select sr.id,
            greatest(0,sr.quantity-sr.consumed_qty-sr.released_qty) as outstanding
     from public.stock_reservations sr
@@ -83,9 +83,9 @@ begin
     order by sr.created_at,sr.id
     for update
   loop
-    released_total:=released_total+r.outstanding;
+    released_total:=released_total+reservation_row.outstanding;
     released_rows:=released_rows+1;
-    perform private.release_reservation_remaining(r.id);
+    perform private.release_reservation_remaining(reservation_row.id);
   end loop;
 
   update public.approval_tokens at
