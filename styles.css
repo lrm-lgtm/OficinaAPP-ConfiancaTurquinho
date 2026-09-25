@@ -3525,3 +3525,5 @@ body.sheet-open .internal-access-gate{
   .delivery-sheet-card{max-width:760px}
   .delivery-photo-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
 }
+
+.inspection-phase-block+.inspection-phase-block{margin-top:16px;padding-top:10px;border-top:1px solid var(--line)}
