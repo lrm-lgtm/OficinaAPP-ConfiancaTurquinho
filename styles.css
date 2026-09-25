@@ -3554,7 +3554,7 @@ body.sheet-open .internal-access-gate{
 .cancel-adjustment-copy small{font-size:9px;color:var(--muted);margin-top:2px}
 .cancel-adjustment-controls{display:grid;grid-template-columns:120px 1fr;gap:7px}
 .cancel-adjustment-controls input{min-width:0;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:8px;font-size:10px}
-.cancel-action-grid{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.cancel-action-grid{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
 .cancel-action-grid button,.cancel-mini{border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:9px;padding:8px 6px;font-size:9px;font-weight:800}
 .cancel-action-grid button:hover,.cancel-mini:hover{border-color:var(--accent)}
 .cancel-mini.danger{color:#ff9b96;border-color:rgba(231,75,69,.38)}
