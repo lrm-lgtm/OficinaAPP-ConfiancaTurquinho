@@ -37,19 +37,25 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (staffError || !staffProfile?.active) return json({ error: "staff_access_required" }, 403);
 
+    const { data: permissions, error: permissionsError } = await userClient.rpc("my_permissions");
+    if (
+      permissionsError ||
+      !Array.isArray(permissions) ||
+      (!permissions.includes("*") && !permissions.includes("finance.write"))
+    ) {
+      return json({ error: "finance_write_required" }, 403);
+    }
+
     if (!mpAccessToken) return json({ error: "provider_not_configured", provider: "mercadopago" }, 503);
 
     const body = await req.json();
-    const workOrderId = String(body.work_order_id || "");
-    const budgetRevisionId = body.budget_revision_id ? String(body.budget_revision_id) : null;
-    const receivableId = body.receivable_id ? String(body.receivable_id) : null;
-    const payerEmail = String(body.payer_email || "").trim();
+    const budgetRevisionId = String(body.budget_revision_id || "");
+    const payerEmail = String(body.payer_email || "").trim().toLowerCase();
     const payerDocument = String(body.payer_document || "").replace(/\D/g, "");
-    const amount = Number(body.amount || 0);
 
-    if (!workOrderId || !payerEmail || !Number.isFinite(amount) || amount <= 0) {
-      return json({ error: "invalid_request" }, 400);
-    }
+    if (!budgetRevisionId || !payerEmail) return json({ error: "invalid_request" }, 400);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payerEmail)) return json({ error: "invalid_payer_email" }, 400);
+    if (![11, 14].includes(payerDocument.length)) return json({ error: "invalid_payer_document" }, 400);
 
     const admin = createClient(url, serviceRole);
     const { data: requestRow, error: insertError } = await admin
