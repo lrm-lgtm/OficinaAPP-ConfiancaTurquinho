@@ -3505,3 +3505,23 @@ body.sheet-open .internal-access-gate{
   body:not(.public-mode) .customer-history-kpis{grid-template-columns:repeat(4,1fr)}
   body:not(.public-mode) .customer-history-panel{min-height:360px}
 }
+
+
+/* ===== v15.1 vehicle delivery ===== */
+.delivery-sheet-card{max-height:92vh;overflow:auto}
+.delivery-photo-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
+.delivery-photo-card{border:1px solid #30373d;border-radius:13px;overflow:hidden;background:#0f1214;cursor:pointer}
+.delivery-photo-card input{display:none}
+.delivery-photo-preview{aspect-ratio:1.45/1;display:grid;place-items:center;background:linear-gradient(145deg,#171b1e,#22272b);overflow:hidden;font-size:26px}
+.delivery-photo-preview img{width:100%;height:100%;object-fit:cover}
+.delivery-photo-card b,.delivery-photo-card small{display:block;padding:0 9px}
+.delivery-photo-card b{font-size:10px;padding-top:7px;padding-bottom:2px}
+.delivery-photo-card small{font-size:9px;color:var(--muted);padding-bottom:7px}
+.delivery-photo-card.captured{border-color:#316f4f}
+.delivery-photo-card.captured b{color:#64d99a}
+.delivery-progress{margin-bottom:11px}
+#deliveryProgressBar{width:0}
+@media(min-width:700px){
+  .delivery-sheet-card{max-width:760px}
+  .delivery-photo-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
