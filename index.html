@@ -7,7 +7,7 @@
   <meta name="description" content="Auto Mecânica Confiança — gestão de oficina">
   <title>Auto Mecânica Confiança</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=14.1">
+  <link rel="stylesheet" href="./styles.css?v=14.2">
 </head>
 <body>
   <header class="appbar">
@@ -311,6 +311,7 @@
       <div class="page-title"><div><span>Peças e serviços</span><h1>Estoque / catálogo</h1></div><span class="status open">dados reais</span></div>
       <label class="search"><span>⌕</span><input id="stockSearch" placeholder="Buscar peça, serviço ou código"></label>
       <div class="stock-summary" id="stockSummary"></div>
+      <div class="stock-ledger-note">Movimentações ficam registradas no histórico. O saldo não é alterado apagando registros.</div>
       <div class="stack stock-real-list" id="stockList"><div class="search-empty">Carregando catálogo…</div></div>
     </section>
 
@@ -687,6 +688,44 @@
     </div>
   </div>
 
+  <div class="sheet" id="stockMovementSheet" hidden>
+    <button class="sheet-backdrop" data-close-sheet aria-label="Fechar"></button>
+    <div class="sheet-card stock-movement-sheet-card">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title-row"><div><small>Estoque</small><h2>Movimentar item</h2></div><span class="private-badge">auditável</span></div>
+
+      <div class="stock-move-summary">
+        <div><b id="stockMoveName">Item</b><small id="stockMoveMeta">—</small></div>
+        <strong id="stockMoveBalance">0 un</strong>
+      </div>
+
+      <form id="stockMovementForm" class="finance-form">
+        <input type="hidden" id="stockMoveItemId">
+        <label>Tipo de movimentação
+          <select id="stockMoveType">
+            <option value="entry">Entrada</option>
+            <option value="consume">Consumo em OS</option>
+            <option value="return">Devolução</option>
+            <option value="adjustment">Ajuste de inventário</option>
+          </select>
+        </label>
+        <div class="formgrid">
+          <label>Quantidade<input id="stockMoveQty" inputmode="decimal" value="1" required></label>
+          <label id="stockMoveCostWrap">Custo unitário<input id="stockMoveCost" inputmode="decimal" placeholder="opcional"></label>
+        </div>
+        <label id="stockMoveOrderWrap">Vincular à OS<input id="stockMoveOrder" placeholder="#000123"></label>
+        <label>Observação<input id="stockMoveNote" placeholder="Ex.: compra balcão / peça instalada"></label>
+        <div class="provider-status" id="stockMoveHint">Entrada aumenta o saldo. Consumo exige saldo disponível.</div>
+        <button class="btn primary full" type="submit">Registrar movimentação</button>
+      </form>
+
+      <div class="stock-history-block">
+        <div class="section-head compact"><div><h2>Últimas movimentações</h2><small>Histórico deste item</small></div></div>
+        <div id="stockMoveHistory"><div class="search-empty">Carregando…</div></div>
+      </div>
+    </div>
+  </div>
+
   <div class="sheet" id="staffInviteSheet" hidden>
     <button class="sheet-backdrop" data-close-sheet aria-label="Fechar"></button>
     <div class="sheet-card team-sheet-card">
@@ -764,6 +803,6 @@
 
   <div class="toast" id="toast"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./app.js?v=14.1"></script>
+  <script src="./app.js?v=14.2"></script>
 </body>
 </html>
