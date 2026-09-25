@@ -3154,3 +3154,132 @@ body.sheet-open .internal-access-gate{
   .team-member-card{grid-template-columns:34px minmax(0,1fr)}
   .team-member-actions{grid-column:2;max-width:none;text-align:left}
 }
+
+
+/* ===== v14.1 finance / crediario ===== */
+.finance-kpis-v141{
+  grid-template-columns:repeat(2,minmax(0,1fr));
+}
+.finance-tabs{
+  display:flex;
+  gap:5px;
+  overflow-x:auto;
+  margin:9px 0;
+  padding-bottom:1px;
+  scrollbar-width:none;
+}
+.finance-tabs::-webkit-scrollbar{display:none}
+.finance-tabs button{
+  flex:0 0 auto;
+  min-height:32px;
+  padding:0 10px;
+  border:1px solid #30373d;
+  border-radius:9px;
+  background:#15191c;
+  color:#8f999f;
+  font-size:8px;
+  font-weight:900;
+}
+.finance-tabs button.active{
+  border-color:#e44538;
+  background:#261615;
+  color:#fff;
+}
+.finance-list-v141{display:grid;gap:6px}
+.finance-detail-row{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto auto;
+  gap:9px;
+  align-items:center;
+  min-height:68px;
+  padding:9px 10px;
+  border:1px solid #2b3237;
+  border-radius:12px;
+  background:#14181b;
+}
+.finance-detail-row.overdue{
+  border-color:#6a302a;
+  background:#211312;
+}
+.finance-detail-copy{min-width:0}
+.finance-detail-title{display:flex;align-items:center;gap:6px}
+.finance-detail-title b{font-size:9px}
+.finance-detail-copy>strong{
+  display:block;
+  margin-top:3px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:10.5px;
+}
+.finance-detail-copy>small{
+  display:block;
+  margin-top:3px;
+  color:#7d878d;
+  font-size:7.5px;
+}
+.finance-mode{
+  padding:3px 5px;
+  border-radius:999px;
+  background:#22303a;
+  color:#91bdd5;
+  font-size:6.5px;
+  font-weight:900;
+}
+.finance-mode.credit{background:#332a12;color:#e0c36b}
+.finance-mode.expense{background:#301817;color:#e9948c}
+.finance-detail-value{text-align:right}
+.finance-detail-value span,.finance-detail-value b,.finance-detail-value small{display:block}
+.finance-detail-value span{color:#6f7980;font-size:6.5px;text-transform:uppercase}
+.finance-detail-value b{margin-top:2px;font-size:11px}
+.finance-detail-value small{margin-top:2px;color:#747e85;font-size:7px}
+.finance-row-action{
+  min-width:62px;
+  min-height:34px;
+  border:1px solid #3a4740;
+  border-radius:8px;
+  background:#173022;
+  color:#7fdda6;
+  font-size:8px;
+  font-weight:900;
+}
+.finance-clear{
+  padding:22px;
+  border:1px solid #294638;
+  border-radius:12px;
+  background:#101c16;
+  color:#7fc99d;
+  text-align:center;
+  font-size:9px;
+}
+.finance-settlement-summary{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:10px;
+  padding:11px;
+  margin-bottom:10px;
+  border:1px solid #30373d;
+  border-radius:12px;
+  background:#121619;
+}
+.finance-settlement-summary span,.finance-settlement-summary b{display:block}
+.finance-settlement-summary span{color:#727c83;font-size:7px}
+.finance-settlement-summary b{margin-top:3px;font-size:11px}
+.finance-settlement-summary strong{font-size:18px}
+
+@media(min-width:760px){
+  .finance-kpis-v141{grid-template-columns:repeat(4,minmax(150px,1fr))}
+}
+@media(min-width:1100px){
+  body:not(.public-mode) .finance-kpis-v141{
+    max-width:1050px;
+    grid-template-columns:repeat(4,minmax(180px,1fr));
+  }
+  body:not(.public-mode) .finance-tabs{max-width:1000px}
+  body:not(.public-mode) .finance-list-v141{max-width:1100px}
+  body:not(.public-mode) .finance-detail-row{
+    grid-template-columns:minmax(320px,1fr) 180px 90px;
+    min-height:66px;
+  }
+}
