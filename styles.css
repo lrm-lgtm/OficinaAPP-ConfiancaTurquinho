@@ -3410,3 +3410,98 @@ body.sheet-open .internal-access-gate{
   body:not(.public-mode) .stock-summary{max-width:900px;grid-template-columns:repeat(4,minmax(150px,1fr))}
   body:not(.public-mode) .reserved-part-sheet-card{width:min(500px,42vw)}
 }
+
+
+/* ===== v15.0 customer + vehicle history ===== */
+.customer-history-head{
+  display:grid;
+  grid-template-columns:38px minmax(0,1fr) auto;
+  gap:9px;
+  align-items:center;
+  margin-bottom:10px;
+}
+.customer-history-head>div span,
+.customer-history-head>div h1,
+.customer-history-head>div small{display:block}
+.customer-history-head>div span{color:#6e787f;font-size:7px;text-transform:uppercase;font-weight:900}
+.customer-history-head>div h1{margin:2px 0 0;font-size:20px}
+.customer-history-head>div small{margin-top:2px;color:#879198;font-size:8px}
+.customer-history-back{
+  width:36px;height:36px;border:1px solid #30383d;border-radius:10px;background:#171b1e;color:#dce1e3;font-size:20px
+}
+.customer-history-kpis{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:7px;
+  margin-bottom:10px;
+}
+.customer-history-kpis article{
+  padding:9px 10px;border:1px solid #2b3237;border-radius:11px;background:#14181b
+}
+.customer-history-kpis span,.customer-history-kpis b,.customer-history-kpis small{display:block}
+.customer-history-kpis span{color:#727d83;font-size:6.8px;text-transform:uppercase}
+.customer-history-kpis b{margin-top:3px;font-size:15px}
+.customer-history-kpis small{margin-top:2px;color:#778188;font-size:7px}
+.customer-history-layout{display:grid;gap:10px}
+.customer-history-panel{
+  min-width:0;padding:10px;border:1px solid #293036;border-radius:13px;background:#101416
+}
+.customer-vehicle-list{display:grid;gap:6px}
+.customer-vehicle-card{
+  display:grid;grid-template-columns:38px minmax(0,1fr);gap:9px;align-items:center;min-height:62px;
+  padding:9px;border:1px solid #2b3237;border-radius:11px;background:#15191c
+}
+.customer-vehicle-icon{
+  width:36px;height:36px;display:grid;place-items:center;border-radius:10px;background:#242a2e;font-size:16px
+}
+.customer-vehicle-card b,.customer-vehicle-card small,.customer-vehicle-card span{display:block}
+.customer-vehicle-card b{font-size:9.5px}
+.customer-vehicle-card small{margin-top:2px;color:#808a90;font-size:7.5px}
+.customer-vehicle-card span{margin-top:4px;color:#b2bac0;font-size:8px;font-weight:800}
+.customer-order-history{display:grid;gap:0}
+.customer-history-order{
+  position:relative;
+  display:grid;
+  grid-template-columns:12px minmax(0,1fr) auto;
+  gap:8px;
+  padding:8px 6px;
+  border-bottom:1px solid #252b30;
+  cursor:pointer;
+}
+.customer-history-order:last-child{border-bottom:0}
+.history-order-line{
+  position:relative;width:2px;height:100%;margin:auto;background:#333b40
+}
+.history-order-line:before{
+  content:"";position:absolute;top:6px;left:50%;width:8px;height:8px;border-radius:50%;
+  transform:translateX(-50%);background:#e74336;box-shadow:0 0 0 3px #201717
+}
+.history-order-main{min-width:0}
+.history-order-head{display:flex;gap:6px;align-items:center}
+.history-order-head b{font-size:8.5px}
+.history-order-head span{
+  padding:3px 5px;border-radius:999px;background:#242a2e;color:#aeb6bb;font-size:6.5px;font-weight:900
+}
+.history-order-main>strong,.history-order-main>small,.history-order-main>p{display:block}
+.history-order-main>strong{margin-top:4px;font-size:10px}
+.history-order-main>small{margin-top:2px;color:#737d84;font-size:7.5px}
+.history-order-main>p{
+  margin:4px 0 0;color:#969fa5;font-size:7.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis
+}
+.customer-history-order>strong{
+  align-self:center;color:#dce1e3;font-size:9px;white-space:nowrap
+}
+@media(min-width:760px){
+  .customer-history-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
+@media(min-width:1100px){
+  body:not(.public-mode) .customer-history-head,
+  body:not(.public-mode) .customer-history-kpis,
+  body:not(.public-mode) .customer-history-layout{max-width:1180px}
+  body:not(.public-mode) .customer-history-layout{
+    grid-template-columns:minmax(360px,.75fr) minmax(520px,1.25fr);
+    align-items:start;
+  }
+  body:not(.public-mode) .customer-history-kpis{grid-template-columns:repeat(4,1fr)}
+  body:not(.public-mode) .customer-history-panel{min-height:360px}
+}
