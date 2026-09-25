@@ -361,12 +361,12 @@ function serverStatusLabel(status){
 }
 function serverStageLabel(row){
   if(row.status==="waiting_approval") return "Aguardando aprovação";
-  if(row.status==="approved") return "Liberado para execução";
-  if(row.status==="in_service") return "Em execução";
   if(row.status==="ready") return "Aguardando retirada";
   if(row.operational_state==="waiting_parts") return "Aguardando peça";
   if(row.operational_state==="waiting_customer") return "Aguardando cliente";
   if(["third_party","technical_difficulty","other"].includes(row.operational_state)) return "Bloqueada";
+  if(row.status==="approved") return "Liberado para execução";
+  if(row.status==="in_service") return "Em execução";
   if(row.status==="budget") return "Orçamento";
   if(row.status==="inspection") return "Vistoria";
   return "Entrada / diagnóstico";
@@ -3546,13 +3546,6 @@ financeExpenseForm?.addEventListener("submit",async event=>{
   renderFinance();
   toast("Despesa registrada como rascunho local.");
 });
-
-document.getElementById("finishService")?.addEventListener("click",()=>{
-  const pending=[...document.querySelectorAll(".task input")].filter(x=>!x.checked).length;
-  if(pending){toast("Ainda existem "+pending+" tarefas pendentes.");return}
-  toast("Serviço concluído. Próxima etapa: vistoria de saída.");
-});
-document.querySelectorAll(".task input").forEach(input=>input.addEventListener("change",()=>input.closest(".task").classList.toggle("done",input.checked)));
 
 function escapeHtml(value){
   return String(value).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
