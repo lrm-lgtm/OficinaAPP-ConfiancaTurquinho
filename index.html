@@ -7,7 +7,7 @@
   <meta name="description" content="Auto Mecânica Confiança — gestão de oficina">
   <title>Auto Mecânica Confiança</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=15.2">
+  <link rel="stylesheet" href="./styles.css?v=15.3">
 </head>
 <body>
   <header class="appbar">
@@ -106,10 +106,11 @@
       <div class="page-title"><div><span>Operação</span><h1>Ordens de serviço</h1></div><button class="btn primary compact" data-go="new-os">＋ Nova</button></div>
       <label class="search"><span>⌕</span><input id="orderSearch" placeholder="Buscar placa, cliente ou OS"></label>
       <div class="chips">
-        <button class="chip active" data-filter="all">Todas</button>
+        <button class="chip active" data-filter="active">Ativas</button>
         <button class="chip" data-filter="service">Em execução</button>
         <button class="chip" data-filter="waiting">Aguardando</button>
         <button class="chip" data-filter="ready">Prontas</button>
+        <button class="chip" data-filter="closed">Encerradas</button>
       </div>
       <div class="stack" id="orderList"></div>
     </section>
@@ -896,6 +897,6 @@
 
   <div class="toast" id="toast"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./app.js?v=15.2"></script>
+  <script src="./app.js?v=15.3"></script>
 </body>
 </html>
