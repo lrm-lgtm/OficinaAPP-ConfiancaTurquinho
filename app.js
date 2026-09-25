@@ -545,9 +545,9 @@ async function uploadInspectionPhotos(workOrderId){
     const slot=card.dataset.slot||"other";
     const ext=(file.name.split(".").pop()||"jpg").toLowerCase().replace(/[^a-z0-9]/g,"")||"jpg";
     const path=workOrderId+"/entry/"+slot+"-"+crypto.randomUUID()+"."+ext;
+    const evidence=await inspectionEvidenceMetadata(file);
     const {error:uploadError}=await supabaseClient.storage.from("oficina-evidence").upload(path,file,{contentType:file.type||"image/jpeg",upsert:false});
     if(uploadError) throw uploadError;
-    const evidence=await inspectionEvidenceMetadata(file);
     rows.push({
       work_order_id:workOrderId,
       phase:"entry",
@@ -582,12 +582,11 @@ async function uploadQuickCompletionPhotos(workOrderId){
 
     const ext=(file.name.split(".").pop()||"jpg").toLowerCase().replace(/[^a-z0-9]/g,"")||"jpg";
     const storagePath=workOrderId+"/entry/"+slot+"-"+crypto.randomUUID()+"."+ext;
+    const evidence=await inspectionEvidenceMetadata(file);
     const {error:uploadError}=await supabaseClient.storage
       .from("oficina-evidence")
       .upload(storagePath,file,{contentType:file.type||"image/jpeg",upsert:false});
     if(uploadError) throw uploadError;
-
-    const evidence=await inspectionEvidenceMetadata(file);
     rows.push({
       work_order_id:workOrderId,
       phase:"entry",
@@ -4578,11 +4577,11 @@ async function uploadDeliveryPhotos(orderId){
     if(!file) continue;
     const ext=(file.name.split(".").pop()||"jpg").toLowerCase().replace(/[^a-z0-9]/g,"")||"jpg";
     const storagePath=orderId+"/exit/"+slot+"-"+crypto.randomUUID()+"."+ext;
+    const evidence=await inspectionEvidenceMetadata(file);
     const {error:uploadError}=await supabaseClient.storage
       .from("oficina-evidence")
       .upload(storagePath,file,{contentType:file.type||"image/jpeg",upsert:false});
     if(uploadError) throw uploadError;
-    const evidence=await inspectionEvidenceMetadata(file);
     rows.push({
       work_order_id:orderId,
       phase:"exit",
