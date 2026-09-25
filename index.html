@@ -7,7 +7,7 @@
   <meta name="description" content="Auto Mecânica Confiança — gestão de oficina">
   <title>Auto Mecânica Confiança</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=15.6">
+  <link rel="stylesheet" href="./styles.css?v=15.7">
 </head>
 <body>
   <header class="appbar">
@@ -702,7 +702,7 @@
 
       <form class="finance-form" id="pixPaymentForm">
         <label>E-mail do pagador<input id="pixPayerEmail" type="email" required placeholder="cliente@exemplo.com"></label>
-        <label>CPF <em>opcional no piloto</em><input id="pixPayerDocument" inputmode="numeric" placeholder="000.000.000-00"></label>
+        <label>CPF<input id="pixPayerDocument" inputmode="numeric" required placeholder="000.000.000-00"></label>
         <button class="btn primary full" type="submit" id="createPixBtn">Gerar cobrança Pix</button>
       </form>
 
@@ -919,6 +919,6 @@
 
   <div class="toast" id="toast"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./app.js?v=15.6"></script>
+  <script src="./app.js?v=15.7"></script>
 </body>
 </html>

@@ -92,7 +92,7 @@ function applyPermissionUI(){
     document.querySelectorAll(selector).forEach(el=>el.hidden=!visible);
   };
   setVisible("#newClientBtn,[data-sheet-client]",hasPermission("customers.write"));
-  setVisible("#financeReceiptShortcut,#financeExpenseShortcut",hasPermission("finance.write"));
+  setVisible("#financeReceiptShortcut,#financeExpenseShortcut,#openPixPayment",hasPermission("finance.write"));
   setVisible("#addBudgetItem,#newBudgetRevision",hasPermission("budgets.write"));
   setVisible("#copyApproval",hasPermission("budgets.send"));
   setVisible("#inviteStaffBtn",hasPermission("team.manage"));
@@ -2974,6 +2974,7 @@ const pixPaymentForm=document.getElementById("pixPaymentForm");
 const pixProviderStatus=document.getElementById("pixProviderStatus");
 const pixResult=document.getElementById("pixResult");
 let lastPixCode="";
+let currentPixReceivable=null;
 
 async function ensurePilotBudgetLoaded(){
   const selectedOrder=allOrders().find(o=>String(o.id)===String(selectedBudgetOrderId));
@@ -3001,33 +3002,34 @@ async function createMercadoPagoPix(){
     pixProviderStatus.textContent="Não foi possível localizar o orçamento no servidor.";
     return;
   }
+
   await refreshStaffSession();
   if(!staffSession?.access_token || !staffProfile?.active){
     pixProviderStatus.textContent="Entre com um usuário interno liberado antes de gerar a cobrança.";
     openSheet(staffAuthSheet);
     return;
   }
+  if(!hasPermission("finance.write")){
+    pixProviderStatus.textContent="Seu perfil não possui permissão para gerar cobranças.";
+    return;
+  }
 
   const payerEmail=document.getElementById("pixPayerEmail").value.trim();
   const payerDocument=document.getElementById("pixPayerDocument").value.trim();
-  const amount=Number(budget.total||0);
-  const order=budget.order||{};
-  let receivableId=null;
-  if(staffProfile?.active && supabaseClient && budget.id){
-    const {data:receivable}=await supabaseClient
-      .from("receivables")
-      .select("id")
-      .eq("budget_revision_id",budget.id)
-      .maybeSingle();
-    receivableId=receivable?.id||null;
+  const payerDigits=payerDocument.replace(/\D/g,"");
+
+  if(!payerEmail){
+    pixProviderStatus.textContent="Informe o e-mail do pagador.";
+    return;
   }
-  if(!payerEmail || amount<=0){
-    pixProviderStatus.textContent="Informe o e-mail do pagador e confira o valor.";
+  if(payerDigits.length!==11){
+    pixProviderStatus.textContent="Informe um CPF com 11 dígitos.";
     return;
   }
 
   document.getElementById("createPixBtn").disabled=true;
-  pixProviderStatus.textContent="Criando cobrança no Mercado Pago…";
+  pixProviderStatus.textContent="Conferindo saldo e criando cobrança no Mercado Pago…";
+
   try{
     const response=await fetch(V11_CREATE_PIX_ENDPOINT,{
       method:"POST",
@@ -3037,19 +3039,40 @@ async function createMercadoPagoPix(){
         "apikey":V11_SUPABASE_PUBLISHABLE_KEY
       },
       body:JSON.stringify({
-        work_order_id:order.id,
         budget_revision_id:budget.id,
-        receivable_id:receivableId,
-        amount,
+        work_order_id:currentPixReceivable?.work_order_id||budget.order?.id||null,
+        receivable_id:currentPixReceivable?.id||null,
+        amount:currentPixReceivable
+          ? Math.max(0,Number(currentPixReceivable.amount||0)-Number(currentPixReceivable.paid_amount||0))
+          : Number(budget.total||0),
         payer_email:payerEmail,
-        payer_document:payerDocument,
-        description:"Auto Mecânica Confiança · OS #"+String(order.number||"")
+        payer_document:payerDigits,
+        description:"Auto Mecânica Confiança · OS #"+String(budget.order?.number||"")
       })
     });
-    const payload=await response.json();
+
+    const payload=await response.json().catch(()=>({}));
     if(!response.ok){
       if(payload.error==="provider_not_configured"){
         pixProviderStatus.textContent="Mercado Pago preparado, mas ainda falta conectar as credenciais da conta.";
+      }else if(payload.error==="finance_write_required"){
+        pixProviderStatus.textContent="Seu perfil não possui permissão para gerar cobranças.";
+      }else if(payload.error==="budget_not_approved"){
+        pixProviderStatus.textContent="O Pix só pode ser gerado depois da aprovação do orçamento.";
+      }else if(payload.error==="receivable_not_found"){
+        pixProviderStatus.textContent="O contas a receber desta aprovação ainda não foi criado.";
+      }else if(payload.error==="receivable_cancelled"){
+        pixProviderStatus.textContent="Esta cobrança foi cancelada e não pode gerar um novo Pix.";
+      }else if(payload.error==="receivable_already_paid"){
+        pixProviderStatus.textContent="Esta cobrança já está quitada.";
+      }else if(payload.error==="invalid_payer_email"){
+        pixProviderStatus.textContent="Confira o e-mail do pagador.";
+      }else if(payload.error==="invalid_payer_document"){
+        pixProviderStatus.textContent="Informe um CPF com 11 dígitos.";
+      }else if(payload.error==="payment_request_processing"){
+        pixProviderStatus.textContent="Já existe um Pix sendo criado para este recebimento. Aguarde alguns instantes e tente abrir novamente.";
+      }else if(payload.error==="work_order_closed"){
+        pixProviderStatus.textContent="Esta OS já está encerrada.";
       }else if(payload.error==="staff_access_required"){
         pixProviderStatus.textContent="Seu usuário ainda não foi liberado para operações internas.";
       }else{
@@ -3060,13 +3083,21 @@ async function createMercadoPagoPix(){
 
     lastPixCode=payload.pix?.copy_paste||"";
     document.getElementById("pixCopyPaste").value=lastPixCode;
+    document.getElementById("pixPaymentAmount").textContent=moneyBR(payload.amount||0);
+
     const qr=document.getElementById("pixQrImage");
     if(payload.pix?.qr_code_base64){
       qr.src="data:image/png;base64,"+payload.pix.qr_code_base64;
       qr.hidden=false;
-    }else qr.hidden=true;
+    }else{
+      qr.hidden=true;
+      qr.removeAttribute("src");
+    }
+
     pixResult.hidden=false;
-    pixProviderStatus.textContent="Cobrança criada. Status: "+payload.status+".";
+    pixProviderStatus.textContent=payload.reused
+      ?"Pix já existente reaproveitado. Status: "+payload.status+"."
+      :"Cobrança criada pelo saldo em aberto. Status: "+payload.status+".";
   }catch(error){
     pixProviderStatus.textContent="Não foi possível falar com o gateway agora.";
   }finally{
@@ -3075,11 +3106,42 @@ async function createMercadoPagoPix(){
 }
 
 document.getElementById("openPixPayment")?.addEventListener("click",async()=>{
+  if(!hasPermission("finance.write")) return toast("Seu perfil não pode gerar cobranças.");
   const budget=await ensurePilotBudgetLoaded();
-  if(budget) document.getElementById("pixPaymentAmount").textContent=moneyBR(budget.total);
   pixResult.hidden=true;
   lastPixCode="";
+  currentPixReceivable=null;
+  document.getElementById("createPixBtn").disabled=false;
+  document.getElementById("pixCopyPaste").value="";
+  document.getElementById("pixQrImage").hidden=true;
+  pixProviderStatus.textContent="Conferindo o saldo em aberto…";
   openSheet(pixPaymentSheet);
+
+  if(!(budget?.id&&supabaseClient&&staffProfile?.active)){
+    document.getElementById("pixPaymentAmount").textContent=moneyBR(budget?.total||0);
+    pixProviderStatus.textContent="O saldo definitivo será validado no servidor ao gerar o Pix.";
+    return;
+  }
+
+  const {data:receivable,error}=await supabaseClient
+    .from("receivables")
+    .select("id,work_order_id,budget_revision_id,amount,paid_amount,status")
+    .eq("budget_revision_id",budget.id)
+    .maybeSingle();
+
+  if(error||!receivable){
+    document.getElementById("pixPaymentAmount").textContent=moneyBR(budget.total||0);
+    pixProviderStatus.textContent="O saldo definitivo será validado no servidor ao gerar o Pix.";
+    return;
+  }
+
+  currentPixReceivable=receivable;
+  const remaining=Math.max(0,Number(receivable.amount||0)-Number(receivable.paid_amount||0));
+  document.getElementById("pixPaymentAmount").textContent=moneyBR(remaining);
+  pixProviderStatus.textContent=remaining>0
+    ?"Valor exibido = saldo restante do contas a receber."
+    :"Esta cobrança já está quitada.";
+  document.getElementById("createPixBtn").disabled=remaining<=0||receivable.status==="cancelled";
 });
 pixPaymentForm?.addEventListener("submit",event=>{event.preventDefault();createMercadoPagoPix()});
 document.getElementById("copyPixCode")?.addEventListener("click",async()=>{
