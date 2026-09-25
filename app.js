@@ -724,7 +724,7 @@ function historyDetail(row){
     return Number(p.quantity||0).toLocaleString("pt-BR")+" unidade(s) · "+action;
   }
   if(row.event_type==="cancellation_payment_resolved"){
-    const action={refund:"estorno",credit_customer:"crédito ao cliente",keep_charged:"valor mantido"}[p.action]||p.action;
+    const action={refund:"estorno",keep_charged:"valor mantido"}[p.action]||p.action;
     return moneyBR(p.amount||0)+" · "+action;
   }
   if(row.event_type==="cancellation_provider_payment_cancelled") return "Cobrança eletrônica cancelada antes do encerramento da OS.";
@@ -4130,7 +4130,6 @@ function cancelStockActionLabel(action){
 function cancelPaymentActionLabel(action){
   return ({
     refund:"Estornar",
-    credit_customer:"Virar crédito",
     keep_charged:"Manter cobrado"
   })[action]||action;
 }
@@ -4237,8 +4236,7 @@ function renderCancellationAssessment(state){
               (state.can_adjust_finance?
                 '<div class="cancel-action-grid">'+
                   '<button type="button" data-cancel-payment-action="refund">'+(isMp?'↩ Reembolsar MP':'↩ Estorno')+'</button>'+
-                  '<button type="button" data-cancel-payment-action="credit_customer">Crédito</button>'+
-                  '<button type="button" data-cancel-payment-action="keep_charged">Manter</button>'+
+                  '<button type="button" data-cancel-payment-action="keep_charged">Manter cobrado</button>'+
                 '</div>'
                 :'<span class="cancel-lock">financeiro necessário</span>')+
             '</div>')+
@@ -4309,7 +4307,7 @@ function renderCancellationAssessment(state){
         });
         if(error) throw error;
       }
-      toast(action==="refund"?"Estorno registrado.":action==="credit_customer"?"Crédito criado para o cliente.":"Valor mantido no acerto.");
+      toast(action==="refund"?"Estorno registrado.":"Valor mantido no acerto.");
       await loadCancellationAssessment();
     }catch(error){
       status.textContent=cancellationActionError(error);
