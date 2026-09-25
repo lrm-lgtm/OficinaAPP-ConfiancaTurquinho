@@ -292,6 +292,7 @@ let financeTransactions=[];
 let financeReceivables=[];
 let wizardStep=1;
 let requiredPhotos=new Set();
+let completingQuickOrderId=null;
 let deferredPrompt=null;
 
 function toast(message){
@@ -605,6 +606,7 @@ function historyLabel(eventType){
   return ({
     work_order_created:"OS criada",
     work_order_quick_created:"OS rápida criada",
+    work_order_quick_completed:"OS rápida completada",
     kanban_fields_initialized:"Prazo operacional iniciado",
     work_order_operational_updated:"Andamento atualizado",
     budget_approved:"Orçamento aprovado pelo cliente",
@@ -623,6 +625,7 @@ function historyLabel(eventType){
 }
 function historyDetail(row){
   const p=row.payload||{};
+  if(row.event_type==="work_order_quick_completed") return "Cadastro, veículo e vistoria de entrada concluídos na mesma OS.";
   if(row.event_type==="work_order_operational_updated"){
     const bits=[];
     if(p.reason) bits.push(p.reason);
