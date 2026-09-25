@@ -7,7 +7,7 @@
   <meta name="description" content="Auto Mecânica Confiança — gestão de oficina">
   <title>Auto Mecânica Confiança</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=13.3">
+  <link rel="stylesheet" href="./styles.css?v=14.0">
 </head>
 <body>
   <header class="appbar">
@@ -34,6 +34,7 @@
       <button data-go="mechanic"><span>⚙</span><b>Execução</b></button>
       <button data-go="stock"><span>▦</span><b>Estoque</b><em>em evolução</em></button>
       <div class="desktop-nav-label">Gestão</div>
+      <button data-go="team"><span>👥</span><b>Equipe</b></button>
       <button data-go="finance"><span>R$</span><b>Financeiro</b></button>
     </nav>
 
@@ -313,6 +314,38 @@
       <div class="stack stock-real-list" id="stockList"><div class="search-empty">Carregando catálogo…</div></div>
     </section>
 
+    <section class="view internal-only desktop-workspace" data-view="team">
+      <div class="page-title">
+        <div><span>Acesso interno</span><h1>Equipe e permissões</h1></div>
+        <button class="btn primary compact" id="inviteStaffBtn">＋ Convidar</button>
+      </div>
+
+      <div class="team-kpis">
+        <article><span>Ativos</span><b id="teamActiveCount">0</b><small>usuários liberados</small></article>
+        <article><span>Convites</span><b id="teamInviteCount">0</b><small>aguardando cadastro</small></article>
+        <article><span>Mecânicos</span><b id="teamMechanicCount">0</b><small>perfil técnico</small></article>
+      </div>
+
+      <div class="team-layout">
+        <section class="team-panel">
+          <div class="section-head compact"><div><h2>Usuários</h2><small>Quem pode entrar no sistema</small></div><button type="button" id="refreshTeamBtn">Atualizar</button></div>
+          <div class="team-list" id="teamList"><div class="search-empty">Carregando equipe…</div></div>
+        </section>
+
+        <section class="team-panel permission-panel">
+          <div class="section-head compact"><div><h2>Permissões por perfil</h2><small>Aplicadas também no banco de dados</small></div></div>
+          <div class="permission-role-tabs" id="permissionRoleTabs">
+            <button class="active" data-permission-role="manager">Gerente</button>
+            <button data-permission-role="reception">Recepção</button>
+            <button data-permission-role="mechanic">Mecânico</button>
+            <button data-permission-role="finance">Financeiro</button>
+          </div>
+          <div class="permission-matrix" id="permissionMatrix"><div class="search-empty">Carregando permissões…</div></div>
+          <div class="permission-footnote">Proprietário mantém acesso total e não pode perder a última conta proprietária ativa.</div>
+        </section>
+      </div>
+    </section>
+
     <section class="view internal-only desktop-workspace" data-view="finance">
       <div class="page-title"><div><span>Somente interno</span><h1>Financeiro</h1></div><span class="status open">Privado</span></div>
 
@@ -386,6 +419,7 @@
       <button class="sheet-action" data-sheet-go="mechanic"><span>🔧</span><div><b>Área do mecânico</b><small>Minhas OS e execução</small></div></button>
       <button class="sheet-action" data-sheet-go="stock"><span>▦</span><div><b>Estoque</b><small>Peças e reservas</small></div></button>
       <button class="sheet-action" data-sheet-go="finance"><span>R$</span><div><b>Financeiro</b><small>Custos internos e recebimentos</small></div></button>
+      <button class="sheet-action" data-sheet-go="team"><span>👥</span><div><b>Equipe</b><small>Usuários, perfis e permissões</small></div></button>
       <button class="sheet-action" id="staffAccessShortcut"><span>◉</span><div><b>Acesso interno</b><small>Login, perfil e sincronização</small></div></button>
     </div>
   </div>
@@ -504,6 +538,9 @@
           <label>Prazo combinado<input id="osQuickPromised" type="datetime-local"></label>
           <label>Previsão atual<input id="osQuickForecast" type="datetime-local"></label>
         </div>
+        <label id="osQuickAssigneeWrap">Responsável
+          <select id="osQuickAssignee"><option value="">Sem responsável definido</option></select>
+        </label>
         <label>Motivo / observação interna<textarea id="osQuickReason" rows="2" placeholder="Ex.: fornecedor entrega terminal amanhã às 09h"></textarea></label>
         <div class="quick-state-hint" id="osQuickHint">Escolha uma situação e salve.</div>
         <button class="btn primary full" type="submit" id="osQuickSave">Salvar atualização</button>
@@ -586,6 +623,52 @@
     </div>
   </div>
 
+  <div class="sheet" id="staffInviteSheet" hidden>
+    <button class="sheet-backdrop" data-close-sheet aria-label="Fechar"></button>
+    <div class="sheet-card team-sheet-card">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title-row"><div><small>Equipe</small><h2>Convidar usuário</h2></div><span class="private-badge">proprietário</span></div>
+      <form id="staffInviteForm" class="finance-form">
+        <label>Nome completo<input name="full_name" required autocomplete="name" placeholder="Nome do funcionário"></label>
+        <label>E-mail<input name="email" required type="email" autocomplete="email" placeholder="usuario@email.com"></label>
+        <label>Perfil
+          <select name="role" required>
+            <option value="manager">Gerente</option>
+            <option value="reception">Recepção</option>
+            <option value="mechanic">Mecânico</option>
+            <option value="finance">Financeiro</option>
+          </select>
+        </label>
+        <div class="provider-status">O e-mail fica pré-autorizado por 30 dias. A pessoa cria a própria senha na tela de acesso.</div>
+        <button class="btn primary full" type="submit">Criar convite</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="sheet" id="staffMemberSheet" hidden>
+    <button class="sheet-backdrop" data-close-sheet aria-label="Fechar"></button>
+    <div class="sheet-card team-sheet-card">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title-row"><div><small>Equipe</small><h2 id="staffMemberTitle">Usuário</h2></div><span class="private-badge" id="staffMemberStatus">ativo</span></div>
+      <div class="team-member-email" id="staffMemberEmail">—</div>
+      <form id="staffMemberForm" class="finance-form">
+        <input type="hidden" name="user_id" id="staffMemberId">
+        <label>Perfil
+          <select name="role" id="staffMemberRole">
+            <option value="owner">Proprietário</option>
+            <option value="manager">Gerente</option>
+            <option value="reception">Recepção</option>
+            <option value="mechanic">Mecânico</option>
+            <option value="finance">Financeiro</option>
+          </select>
+        </label>
+        <label class="team-active-toggle"><input type="checkbox" id="staffMemberActive" checked><span><b>Acesso ativo</b><small>Desative para bloquear o login sem apagar o histórico.</small></span></label>
+        <div class="provider-status" id="staffMemberHint">As permissões do perfil são aplicadas no servidor.</div>
+        <button class="btn primary full" type="submit" id="saveStaffMember">Salvar acesso</button>
+      </form>
+    </div>
+  </div>
+
   <div class="sheet" id="staffAuthSheet" hidden>
     <button class="sheet-backdrop" data-close-sheet aria-label="Fechar"></button>
     <div class="sheet-card auth-sheet-card">
@@ -617,6 +700,6 @@
 
   <div class="toast" id="toast"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./app.js?v=13.3"></script>
+  <script src="./app.js?v=14.0"></script>
 </body>
 </html>
