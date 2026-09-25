@@ -24,7 +24,7 @@ function mapProviderStatus(status: string) {
 }
 
 function isValidEmail(value: string) {
-  return /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(value);
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
 Deno.serve(async (req) => {
