@@ -7,7 +7,7 @@
   <meta name="description" content="Auto Mecânica Confiança — gestão de oficina">
   <title>Auto Mecânica Confiança</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=15.5">
+  <link rel="stylesheet" href="./styles.css?v=15.6">
 </head>
 <body>
   <header class="appbar">
@@ -828,13 +828,16 @@
         <div><small>Encerramento</small><h2>Cancelar ordem de serviço</h2></div>
         <span class="private-badge" id="cancelWorkOrderRef">OS</span>
       </div>
-      <div class="provider-status">O cancelamento libera reservas e fecha cobranças ainda não pagas. Se já houver peça instalada, valor recebido ou Pix ativo, o sistema bloqueia para conferência manual.</div>
+      <div class="provider-status">Primeiro o sistema confere peças, pagamentos e cobranças eletrônicas. Qualquer acerto fica registrado antes do encerramento.</div>
+      <div id="cancelAdjustmentContent" class="cancel-adjustment-content">
+        <div class="inspection-loading">Carregando pendências do cancelamento…</div>
+      </div>
       <form id="cancelWorkOrderForm" class="finance-form">
         <label>Motivo do cancelamento
-          <textarea id="cancelWorkOrderReason" rows="4" required minlength="5" placeholder="Ex.: cliente desistiu antes do início do serviço"></textarea>
+          <textarea id="cancelWorkOrderReason" rows="3" required minlength="5" placeholder="Ex.: cliente desistiu após o diagnóstico"></textarea>
         </label>
-        <div class="provider-status" id="cancelWorkOrderStatus">Nenhuma baixa física ou estorno financeiro será feito automaticamente.</div>
-        <button class="btn cancel-danger full" type="submit" id="cancelWorkOrderSubmit">Cancelar esta OS</button>
+        <div class="provider-status" id="cancelWorkOrderStatus">O botão final só será liberado quando todas as pendências estiverem resolvidas.</div>
+        <button class="btn cancel-danger full" type="submit" id="cancelWorkOrderSubmit" disabled>Concluir cancelamento da OS</button>
       </form>
     </div>
   </div>
@@ -916,6 +919,6 @@
 
   <div class="toast" id="toast"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./app.js?v=15.5"></script>
+  <script src="./app.js?v=15.6"></script>
 </body>
 </html>

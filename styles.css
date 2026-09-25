@@ -3533,3 +3533,35 @@ body.sheet-open .internal-access-gate{
 .btn.cancel-danger{background:var(--danger);color:#fff;border:1px solid var(--danger);font-weight:900}
 .btn.cancel-outline{background:transparent;color:#ff8d87;border:1px solid rgba(231,75,69,.42);margin-top:8px}
 .btn.cancel-outline:hover{border-color:var(--danger)}
+
+/* ===== v15.6 cancellation adjustment center ===== */
+.cancel-os-sheet-card{max-height:92vh;overflow:auto}
+.cancel-adjustment-content{display:grid;gap:10px;margin:12px 0}
+.cancel-adjustment-block{border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.025);padding:10px;display:grid;gap:8px}
+.cancel-adjustment-block.warning{border-color:rgba(217,169,0,.38)}
+.cancel-adjustment-block.danger{border-color:rgba(231,75,69,.42)}
+.cancel-adjustment-block.success{border-color:rgba(23,160,94,.42)}
+.cancel-adjustment-block p{margin:0;color:var(--muted);font-size:11px;line-height:1.45}
+.cancel-adjustment-head{display:flex;justify-content:space-between;gap:10px;align-items:center}
+.cancel-adjustment-head b{font-size:12px}
+.cancel-adjustment-head span{font-size:9px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted)}
+.cancel-adjustment-row{border-top:1px solid var(--line);padding-top:9px;display:grid;gap:8px}
+.cancel-adjustment-row:first-of-type{border-top:0;padding-top:0}
+.cancel-adjustment-row.done{opacity:.75}
+.cancel-adjustment-row.provider{grid-template-columns:1fr auto;align-items:center}
+.cancel-adjustment-copy b,.cancel-adjustment-copy small{display:block}
+.cancel-adjustment-copy b{font-size:11px}
+.cancel-adjustment-copy small{font-size:9px;color:var(--muted);margin-top:2px}
+.cancel-adjustment-controls{display:grid;grid-template-columns:120px 1fr;gap:7px}
+.cancel-adjustment-controls input{min-width:0;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:8px;font-size:10px}
+.cancel-action-grid{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.cancel-action-grid button,.cancel-mini{border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:9px;padding:8px 6px;font-size:9px;font-weight:800}
+.cancel-action-grid button:hover,.cancel-mini:hover{border-color:var(--accent)}
+.cancel-mini.danger{color:#ff9b96;border-color:rgba(231,75,69,.38)}
+.cancel-done{font-size:10px;font-weight:800;color:#64d99a}
+.cancel-lock{font-size:9px;color:var(--muted)}
+@media(max-width:520px){
+  .cancel-adjustment-controls{grid-template-columns:1fr}
+  .cancel-action-grid{grid-column:auto;grid-template-columns:1fr}
+  .cancel-adjustment-row.provider{grid-template-columns:1fr}
+}
