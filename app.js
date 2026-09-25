@@ -4055,8 +4055,251 @@ function closeSheets(){
 document.querySelectorAll("[data-close-sheet]").forEach(btn=>btn.addEventListener("click",closeSheets));
 
 let cancelWorkOrderSelectedId=null;
+let cancelAdjustmentState=null;
+let cancelAdjustmentBusy=false;
 
-function openCancelWorkOrderSheet(id){
+function cancelStockActionLabel(action){
+  return ({
+    return_to_stock:"Voltou ao estoque",
+    write_off:"Perda / inutilizada",
+    keep_installed:"Fica no veículo"
+  })[action]||action;
+}
+function cancelPaymentActionLabel(action){
+  return ({
+    refund:"Estornar",
+    credit_customer:"Virar crédito",
+    keep_charged:"Manter cobrado"
+  })[action]||action;
+}
+function cancellationActionError(error){
+  const message=String(error?.message||error||"");
+  if(message.includes("quantity_exceeds_consumed_unresolved")) return "A quantidade ultrapassa o que ainda precisa de acerto.";
+  if(message.includes("resolution_exceeds_payment")) return "O valor ultrapassa o saldo ainda pendente deste pagamento.";
+  if(message.includes("provider_refund_required")) return "Este pagamento precisa ser reembolsado diretamente pelo Mercado Pago.";
+  if(message.includes("finance_adjustment_not_allowed")) return "Seu perfil não pode fazer acertos financeiros.";
+  if(message.includes("stock_adjustment_not_allowed")) return "Seu perfil não pode fazer acertos de estoque.";
+  if(message.includes("mercadopago_refund_error")) return "O Mercado Pago não confirmou o reembolso. Nada foi baixado localmente.";
+  if(message.includes("mercadopago_cancel_error")) return "O Mercado Pago não confirmou o cancelamento desta cobrança.";
+  if(message.includes("invalid_refund_amount")) return "Confira o valor do reembolso.";
+  return "Não foi possível concluir este acerto.";
+}
+
+async function callMercadoPagoAdjustment(payload){
+  const response=await fetch(V11_MP_ADJUST_ENDPOINT,{
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      "Authorization":"Bearer "+staffSession.access_token,
+      "apikey":V11_SUPABASE_PUBLISHABLE_KEY
+    },
+    body:JSON.stringify(payload)
+  });
+  const body=await response.json().catch(()=>({}));
+  if(!response.ok){
+    const error=new Error(String(body.error||"provider_adjustment_failed"));
+    error.payload=body;
+    throw error;
+  }
+  return body;
+}
+
+function renderCancellationAssessment(state){
+  const target=document.getElementById("cancelAdjustmentContent");
+  const status=document.getElementById("cancelWorkOrderStatus");
+  const submit=document.getElementById("cancelWorkOrderSubmit");
+  if(!target||!status||!submit) return;
+
+  const blocks=[];
+
+  if(state.needs_provider_cancellation){
+    if(!state.can_view_finance){
+      blocks.push('<section class="cancel-adjustment-block danger"><div class="cancel-adjustment-head"><b>Cobrança eletrônica ativa</b><span>financeiro</span></div><p>Um usuário com acesso financeiro precisa cancelar a cobrança antes do encerramento.</p></section>');
+    }else{
+      const requests=(state.active_payment_requests||[]).map(row=>
+        '<article class="cancel-adjustment-row provider" data-cancel-request-row="'+escapeHtml(row.request_id)+'">'+
+          '<div><b>Pix '+moneyBR(row.amount)+'</b><small>'+escapeHtml(String(row.status||"pendente"))+(row.expires_at?' · vence '+shortDateTime(row.expires_at):'')+'</small></div>'+
+          (state.can_adjust_finance?'<button type="button" class="cancel-mini danger" data-cancel-provider-request="'+escapeHtml(row.request_id)+'">Cancelar Pix</button>':'<span class="cancel-lock">sem permissão</span>')+
+        '</article>'
+      ).join("");
+      blocks.push('<section class="cancel-adjustment-block danger"><div class="cancel-adjustment-head"><b>Cobrança eletrônica ativa</b><span>resolver primeiro</span></div>'+requests+'</section>');
+    }
+  }
+
+  if(state.needs_stock_adjustment || (state.stock||[]).length){
+    if(!(state.stock||[]).length){
+      blocks.push('<section class="cancel-adjustment-block warning"><div class="cancel-adjustment-head"><b>Peça já baixada</b><span>estoque</span></div><p>Um gerente precisa definir o destino da peça antes do cancelamento.</p></section>');
+    }else{
+      const rows=(state.stock||[]).map(row=>{
+        const remaining=Number(row.unresolved_qty||0);
+        const done=remaining<=0;
+        return '<article class="cancel-adjustment-row '+(done?'done':'')+'" data-cancel-stock-row="'+escapeHtml(row.reservation_id)+'">'+
+          '<div class="cancel-adjustment-copy"><b>'+escapeHtml(row.name||"Peça")+'</b><small>'+
+            Number(row.consumed_qty||0).toLocaleString("pt-BR")+' '+escapeHtml(row.unit||"un")+' baixada(s) · '+
+            (done?'acerto concluído':'faltam '+remaining.toLocaleString("pt-BR"))+
+          '</small></div>'+
+          (done?'<span class="cancel-done">✓ resolvido</span>':
+            '<div class="cancel-adjustment-controls">'+
+              '<input type="number" min="0.001" step="0.001" max="'+remaining+'" value="'+remaining+'" data-cancel-stock-qty>'+
+              '<input type="text" placeholder="Observação opcional" data-cancel-stock-note>'+
+              (state.can_adjust_stock?
+                '<div class="cancel-action-grid">'+
+                  '<button type="button" data-cancel-stock-action="return_to_stock">↩ Estoque</button>'+
+                  '<button type="button" data-cancel-stock-action="write_off">Perda</button>'+
+                  '<button type="button" data-cancel-stock-action="keep_installed">No veículo</button>'+
+                '</div>'
+                :'<span class="cancel-lock">gerente necessário</span>')+
+            '</div>')+
+        '</article>';
+      }).join("");
+      blocks.push('<section class="cancel-adjustment-block"><div class="cancel-adjustment-head"><b>Peças já instaladas / baixadas</b><span>defina o destino</span></div>'+rows+'</section>');
+    }
+  }
+
+  if(state.needs_financial_adjustment || (state.payments||[]).length){
+    if(!(state.payments||[]).length){
+      blocks.push('<section class="cancel-adjustment-block warning"><div class="cancel-adjustment-head"><b>Valor já recebido</b><span>financeiro</span></div><p>Um usuário do financeiro precisa definir estorno, crédito ou valor mantido.</p></section>');
+    }else{
+      const rows=(state.payments||[]).map(row=>{
+        const remaining=Number(row.unresolved_amount||0);
+        const done=remaining<=0;
+        const isMp=String(row.provider||"")==="mercadopago";
+        return '<article class="cancel-adjustment-row '+(done?'done':'')+'" data-cancel-payment-row="'+escapeHtml(row.payment_id)+'" data-provider="'+escapeHtml(row.provider||"manual")+'">'+
+          '<div class="cancel-adjustment-copy"><b>'+moneyBR(row.amount)+' · '+escapeHtml((row.method||"pagamento").toUpperCase())+'</b><small>'+
+            escapeHtml(isMp?"Mercado Pago":"Recebimento manual")+' · '+(done?'acerto concluído':'faltam '+moneyBR(remaining))+
+          '</small></div>'+
+          (done?'<span class="cancel-done">✓ resolvido</span>':
+            '<div class="cancel-adjustment-controls">'+
+              '<input type="number" min="0.01" step="0.01" max="'+remaining.toFixed(2)+'" value="'+remaining.toFixed(2)+'" data-cancel-payment-amount>'+
+              '<input type="text" placeholder="Observação opcional" data-cancel-payment-note>'+
+              (state.can_adjust_finance?
+                '<div class="cancel-action-grid">'+
+                  '<button type="button" data-cancel-payment-action="refund">'+(isMp?'↩ Reembolsar MP':'↩ Estorno')+'</button>'+
+                  '<button type="button" data-cancel-payment-action="credit_customer">Crédito</button>'+
+                  '<button type="button" data-cancel-payment-action="keep_charged">Manter</button>'+
+                '</div>'
+                :'<span class="cancel-lock">financeiro necessário</span>')+
+            '</div>')+
+        '</article>';
+      }).join("");
+      blocks.push('<section class="cancel-adjustment-block"><div class="cancel-adjustment-head"><b>Valores já recebidos</b><span>defina o destino</span></div>'+rows+'</section>');
+    }
+  }
+
+  if(!blocks.length){
+    blocks.push('<section class="cancel-adjustment-block success"><div class="cancel-adjustment-head"><b>Sem pendências</b><span>✓ pronto</span></div><p>Não há peça consumida, pagamento recebido ou cobrança eletrônica ativa.</p></section>');
+  }
+
+  target.innerHTML=blocks.join("");
+  submit.disabled=!state.ready_to_cancel||cancelAdjustmentBusy;
+  status.textContent=state.ready_to_cancel
+    ?"Acertos concluídos. Informe o motivo e finalize o cancelamento."
+    :"Resolva as pendências acima. O cancelamento final continua bloqueado.";
+
+  target.querySelectorAll("[data-cancel-stock-action]").forEach(btn=>btn.addEventListener("click",async()=>{
+    const row=btn.closest("[data-cancel-stock-row]");
+    if(!row||cancelAdjustmentBusy) return;
+    const quantity=Number(row.querySelector("[data-cancel-stock-qty]")?.value||0);
+    const note=row.querySelector("[data-cancel-stock-note]")?.value?.trim()||"";
+    cancelAdjustmentBusy=true;
+    renderCancellationAssessment(cancelAdjustmentState);
+    try{
+      const {error}=await supabaseClient.rpc("resolve_cancellation_stock",{
+        p_work_order_id:cancelWorkOrderSelectedId,
+        p_reservation_id:row.dataset.cancelStockRow,
+        p_action:btn.dataset.cancelStockAction,
+        p_quantity:quantity,
+        p_note:note||cancelStockActionLabel(btn.dataset.cancelStockAction)
+      });
+      if(error) throw error;
+      toast("Acerto de estoque registrado.");
+      await loadCancellationAssessment();
+    }catch(error){
+      status.textContent=cancellationActionError(error);
+    }finally{
+      cancelAdjustmentBusy=false;
+      if(cancelAdjustmentState) renderCancellationAssessment(cancelAdjustmentState);
+    }
+  }));
+
+  target.querySelectorAll("[data-cancel-payment-action]").forEach(btn=>btn.addEventListener("click",async()=>{
+    const row=btn.closest("[data-cancel-payment-row]");
+    if(!row||cancelAdjustmentBusy) return;
+    const amount=Number(row.querySelector("[data-cancel-payment-amount]")?.value||0);
+    const note=row.querySelector("[data-cancel-payment-note]")?.value?.trim()||"";
+    const action=btn.dataset.cancelPaymentAction;
+    cancelAdjustmentBusy=true;
+    renderCancellationAssessment(cancelAdjustmentState);
+    try{
+      if(action==="refund" && row.dataset.provider==="mercadopago"){
+        await callMercadoPagoAdjustment({
+          action:"refund",
+          payment_id:row.dataset.cancelPaymentRow,
+          amount
+        });
+      }else{
+        const {error}=await supabaseClient.rpc("resolve_cancellation_payment",{
+          p_work_order_id:cancelWorkOrderSelectedId,
+          p_payment_id:row.dataset.cancelPaymentRow,
+          p_action:action,
+          p_amount:amount,
+          p_note:note||cancelPaymentActionLabel(action)
+        });
+        if(error) throw error;
+      }
+      toast(action==="refund"?"Estorno registrado.":action==="credit_customer"?"Crédito criado para o cliente.":"Valor mantido no acerto.");
+      await loadCancellationAssessment();
+    }catch(error){
+      status.textContent=cancellationActionError(error);
+    }finally{
+      cancelAdjustmentBusy=false;
+      if(cancelAdjustmentState) renderCancellationAssessment(cancelAdjustmentState);
+    }
+  }));
+
+  target.querySelectorAll("[data-cancel-provider-request]").forEach(btn=>btn.addEventListener("click",async()=>{
+    if(cancelAdjustmentBusy) return;
+    cancelAdjustmentBusy=true;
+    renderCancellationAssessment(cancelAdjustmentState);
+    try{
+      await callMercadoPagoAdjustment({
+        action:"cancel_pending",
+        payment_request_id:btn.dataset.cancelProviderRequest
+      });
+      toast("Cobrança Pix cancelada.");
+      await loadCancellationAssessment();
+    }catch(error){
+      status.textContent=cancellationActionError(error);
+    }finally{
+      cancelAdjustmentBusy=false;
+      if(cancelAdjustmentState) renderCancellationAssessment(cancelAdjustmentState);
+    }
+  }));
+}
+
+async function loadCancellationAssessment(){
+  if(!cancelWorkOrderSelectedId) return null;
+  const status=document.getElementById("cancelWorkOrderStatus");
+  const target=document.getElementById("cancelAdjustmentContent");
+  if(target) target.innerHTML='<div class="inspection-loading">Conferindo estoque, financeiro e cobranças…</div>';
+  try{
+    const {data,error}=await supabaseClient.rpc("cancellation_adjustment_for_app",{
+      p_work_order_id:cancelWorkOrderSelectedId
+    });
+    if(error) throw error;
+    cancelAdjustmentState=data||{};
+    renderCancellationAssessment(cancelAdjustmentState);
+    return cancelAdjustmentState;
+  }catch(error){
+    cancelAdjustmentState=null;
+    if(target) target.innerHTML='<div class="search-empty">Não foi possível carregar o acerto de cancelamento.</div>';
+    if(status) status.textContent="O cancelamento permanece bloqueado até a conferência ser carregada.";
+    document.getElementById("cancelWorkOrderSubmit").disabled=true;
+    return null;
+  }
+}
+
+async function openCancelWorkOrderSheet(id){
   const order=allOrders().find(o=>String(o.id)===String(id));
   if(!order) return toast("OS não encontrada.");
   if(isClosedOrder(order)) return toast("Esta OS já está encerrada.");
@@ -4064,12 +4307,14 @@ function openCancelWorkOrderSheet(id){
   if(!hasPermission("work_orders.write_all")) return toast("Seu perfil não pode cancelar uma OS.");
 
   cancelWorkOrderSelectedId=order.id;
+  cancelAdjustmentState=null;
+  cancelAdjustmentBusy=false;
   document.getElementById("cancelWorkOrderRef").textContent=order.ref+" · "+order.plate;
   document.getElementById("cancelWorkOrderReason").value="";
-  document.getElementById("cancelWorkOrderStatus").textContent="Nenhuma baixa física ou estorno financeiro será feito automaticamente.";
-  document.getElementById("cancelWorkOrderSubmit").disabled=false;
+  document.getElementById("cancelWorkOrderStatus").textContent="Conferindo pendências antes do cancelamento…";
+  document.getElementById("cancelWorkOrderSubmit").disabled=true;
   openSheet(cancelWorkOrderSheet);
-  setTimeout(()=>document.getElementById("cancelWorkOrderReason")?.focus(),80);
+  await loadCancellationAssessment();
 }
 
 document.getElementById("cancelWorkOrderForm")?.addEventListener("submit",async event=>{
@@ -4079,13 +4324,20 @@ document.getElementById("cancelWorkOrderForm")?.addEventListener("submit",async 
   const status=document.getElementById("cancelWorkOrderStatus");
   const submit=document.getElementById("cancelWorkOrderSubmit");
   if(!orderId) return;
+  if(!cancelAdjustmentState?.ready_to_cancel){
+    status.textContent="Ainda existe pendência de estoque, financeiro ou cobrança.";
+    await loadCancellationAssessment();
+    return;
+  }
   if(reason.length<5){
     status.textContent="Informe um motivo claro para o cancelamento.";
+    document.getElementById("cancelWorkOrderReason").focus();
     return;
   }
 
+  cancelAdjustmentBusy=true;
   submit.disabled=true;
-  status.textContent="Conferindo estoque, financeiro e cobranças…";
+  status.textContent="Finalizando cancelamento e registrando o histórico…";
   try{
     const drawerWasOpen=document.body.classList.contains("desktop-drawer-open");
     const {data,error}=await supabaseClient.rpc("cancel_work_order",{
@@ -4100,15 +4352,15 @@ document.getElementById("cancelWorkOrderForm")?.addEventListener("submit",async 
     renderOrders();
     if(drawerWasOpen) openDetail(orderId);
     else if(currentView==="detail") openDetail(orderId,true);
-    toast(data?.already_cancelled?"A OS já estava cancelada.":"OS cancelada com segurança.");
+    toast(data?.already_cancelled?"A OS já estava cancelada.":"OS cancelada com todos os acertos registrados.");
   }catch(error){
     const message=String(error?.message||error||"");
     if(message.includes("cancel_requires_stock_adjustment")){
-      status.textContent="Há peça já instalada/baixada. Faça o acerto ou devolução de estoque antes de cancelar.";
+      status.textContent="Ainda existe peça consumida sem destino definido.";
     }else if(message.includes("cancel_requires_financial_adjustment")){
-      status.textContent="Já existe valor recebido. O cancelamento precisa de acerto financeiro antes de encerrar a OS.";
+      status.textContent="Ainda existe valor recebido sem destino definido.";
     }else if(message.includes("cancel_has_active_payment_request")){
-      status.textContent="Existe uma cobrança eletrônica ativa. Cancele/expire essa cobrança antes de cancelar a OS.";
+      status.textContent="Ainda existe cobrança eletrônica ativa.";
     }else if(message.includes("delivered_work_order_cannot_cancel")){
       status.textContent="Uma OS já entregue não pode ser cancelada por este fluxo.";
     }else if(message.includes("cancel_reason_required")){
@@ -4118,8 +4370,10 @@ document.getElementById("cancelWorkOrderForm")?.addEventListener("submit",async 
     }else{
       status.textContent="Não foi possível cancelar. Nenhuma alteração parcial foi mantida.";
     }
+    await loadCancellationAssessment();
   }finally{
-    submit.disabled=false;
+    cancelAdjustmentBusy=false;
+    if(cancelAdjustmentState) renderCancellationAssessment(cancelAdjustmentState);
   }
 });
 
