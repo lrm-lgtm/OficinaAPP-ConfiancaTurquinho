@@ -3283,3 +3283,81 @@ body.sheet-open .internal-access-gate{
     min-height:66px;
   }
 }
+
+
+/* ===== v14.2 transactional stock ledger ===== */
+.stock-ledger-note{
+  margin:0 0 9px;
+  padding:8px 10px;
+  border:1px solid #2d3a33;
+  border-radius:10px;
+  background:#111914;
+  color:#7f9b8a;
+  font-size:8px;
+  line-height:1.35;
+}
+.stock-real-row{
+  grid-template-columns:34px minmax(0,1fr) 92px 110px auto;
+}
+.stock-real-qty small{
+  display:block;
+  margin-top:2px;
+  color:#777f84;
+  font-size:6.5px;
+}
+.stock-row-action{
+  min-width:78px;
+  min-height:32px;
+  padding:0 8px;
+  border:1px solid #35433b;
+  border-radius:8px;
+  background:#17291f;
+  color:#7bd39c;
+  font-size:7.5px;
+  font-weight:900;
+}
+.stock-movement-sheet-card{max-height:92vh;overflow:auto}
+.stock-move-summary{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:10px;
+  padding:10px;
+  margin-bottom:10px;
+  border:1px solid #30373d;
+  border-radius:12px;
+  background:#121619;
+}
+.stock-move-summary b,.stock-move-summary small{display:block}
+.stock-move-summary b{font-size:11px}
+.stock-move-summary small{margin-top:2px;color:#778188;font-size:7.5px}
+.stock-move-summary strong{font-size:17px}
+#stockMoveCostWrap[hidden],#stockMoveOrderWrap[hidden]{display:none!important}
+.stock-history-block{margin-top:12px}
+.stock-move-history-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  min-height:48px;
+  padding:8px 9px;
+  border-bottom:1px solid #252b30;
+}
+.stock-move-history-row:last-child{border-bottom:0}
+.stock-move-history-row b,.stock-move-history-row small{display:block}
+.stock-move-history-row b{font-size:8.5px}
+.stock-move-history-row small{margin-top:2px;color:#737d84;font-size:7px}
+.stock-move-history-row strong{font-size:10px}
+.stock-move-history-row strong.positive{color:#6ed99b}
+.stock-move-history-row strong.negative{color:#ef8278}
+
+@media(max-width:600px){
+  .stock-real-row{grid-template-columns:30px minmax(0,1fr) auto}
+  .stock-row-action{grid-column:2 / -1}
+}
+@media(min-width:1100px){
+  body:not(.public-mode) .stock-real-row{
+    grid-template-columns:40px minmax(260px,1fr) 130px 170px 105px;
+  }
+  body:not(.public-mode) .stock-movement-sheet-card{width:min(520px,44vw)}
+}
