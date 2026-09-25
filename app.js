@@ -282,6 +282,8 @@ let currentKanbanStage="today";
 let currentKanbanHealth="";
 let currentMechanicFilter="active";
 let stockCatalog=[];
+let workOrderPartsCache=new Map();
+let reservedPartOrderId=null;
 let currentFinanceTab="overview";
 let financeTransactions=[];
 let financeReceivables=[];
@@ -609,7 +611,9 @@ function historyLabel(eventType){
     expense_added:"Despesa interna vinculada",
     manual_payment_recorded:"Recebimento registrado",
     expense_settled:"Despesa baixada",
-    stock_movement_recorded:"Movimentação de estoque"
+    stock_movement_recorded:"Movimentação de estoque",
+    reserved_part_consumed:"Peça instalada",
+    reserved_part_released:"Reserva de peça liberada"
   })[eventType]||"Atualização da OS";
 }
 function historyDetail(row){
@@ -629,6 +633,8 @@ function historyDetail(row){
   if(row.event_type==="manual_payment_recorded") return moneyBR(p.amount||0)+" · "+financeMethodLabel(p.method);
   if(row.event_type==="expense_settled") return moneyBR(p.amount||0)+" · "+financeMethodLabel(p.method);
   if(row.event_type==="stock_movement_recorded") return stockMovementLabel(p.movement_type)+" · "+Number(p.quantity_delta||0).toLocaleString("pt-BR");
+  if(row.event_type==="reserved_part_consumed") return Number(p.quantity||0).toLocaleString("pt-BR")+" unidade(s)";
+  if(row.event_type==="reserved_part_released") return Number(p.quantity||0).toLocaleString("pt-BR")+" unidade(s)";
   return p.inspection?"Vistoria de entrada registrada.":"";
 }
 async function loadOrderHistory(order){
@@ -1039,11 +1045,7 @@ async function renderStock(){
     return;
   }
   target.innerHTML='<div class="search-empty">Carregando catálogo…</div>';
-  const {data,error}=await supabaseClient.from("catalog_items")
-    .select("id,kind,name,sku,unit,sale_price,track_stock,stock_qty,min_stock_qty,favorite,usage_count,last_used_at")
-    .eq("active",true)
-    .order("track_stock",{ascending:false})
-    .order("name",{ascending:true});
+  const {data,error}=await supabaseClient.rpc("stock_catalog_for_app");
   if(error){
     target.innerHTML='<div class="search-empty">Não foi possível carregar o catálogo.</div>';
     return;
@@ -1052,11 +1054,13 @@ async function renderStock(){
   renderStockRows();
   if(summary){
     const tracked=stockCatalog.filter(x=>x.track_stock);
-    const low=tracked.filter(x=>Number(x.stock_qty||0)<=Number(x.min_stock_qty||0));
+    const low=tracked.filter(x=>Number(x.available_qty||0)<=Number(x.min_stock_qty||0));
+    const shortage=tracked.filter(x=>Number(x.shortage_qty||0)>0);
     summary.innerHTML=
       '<article><span>Catálogo</span><b>'+stockCatalog.length+'</b><small>itens ativos</small></article>'+
-      '<article><span>Controlados</span><b>'+tracked.length+'</b><small>com saldo</small></article>'+
-      '<article><span>Baixo saldo</span><b>'+low.length+'</b><small>abaixo do mínimo</small></article>';
+      '<article><span>Controlados</span><b>'+tracked.length+'</b><small>estoque ativo</small></article>'+
+      '<article><span>Baixo saldo</span><b>'+low.length+'</b><small>disponível ≤ mínimo</small></article>'+
+      '<article class="'+(shortage.length?"warn":"")+'"><span>Com falta</span><b>'+shortage.length+'</b><small>reservas sem saldo</small></article>';
   }
 }
 function renderStockRows(){
@@ -1067,8 +1071,11 @@ function renderStockRows(){
   target.innerHTML=list.length?list.map(item=>{
     const tracked=item.track_stock;
     const qty=Number(item.stock_qty||0);
+    const reserved=Number(item.reserved_qty||0);
+    const available=Number(item.available_qty??qty);
+    const shortage=Number(item.shortage_qty||0);
     const min=Number(item.min_stock_qty||0);
-    const low=tracked&&qty<=min;
+    const low=tracked&&(available<=min||shortage>0);
     const action=hasPermission("catalog.write")
       ? '<button class="stock-row-action" data-stock-action="'+item.id+'">'+(tracked?"Movimentar":"Ativar controle")+'</button>'
       : "";
@@ -1076,7 +1083,7 @@ function renderStockRows(){
       '<div class="stock-real-kind">'+(item.kind==="service"?"🔧":"▦")+'</div>'+
       '<div class="stock-real-copy"><b>'+escapeHtml(item.name)+'</b><small>'+escapeHtml(item.sku||budgetKindText(item.kind))+' · '+escapeHtml(item.unit||"un")+'</small></div>'+
       '<div class="stock-real-price"><span>Venda</span><b>'+moneyBR(item.sale_price)+'</b></div>'+
-      '<div class="stock-real-qty"><span>'+ (tracked?"Saldo":"Controle") +'</span><b>'+(tracked?qty.toLocaleString("pt-BR")+" "+escapeHtml(item.unit||"un"):"não controlado")+'</b>'+(tracked?'<small>mín. '+min.toLocaleString("pt-BR")+'</small>':'')+'</div>'+
+      '<div class="stock-real-qty"><span>'+ (tracked?"Disponível":"Controle") +'</span><b>'+(tracked?available.toLocaleString("pt-BR")+" "+escapeHtml(item.unit||"un"):"não controlado")+'</b>'+(tracked?'<small>físico '+qty.toLocaleString("pt-BR")+' · reservado '+reserved.toLocaleString("pt-BR")+' · mín. '+min.toLocaleString("pt-BR")+'</small>':'')+(shortage>0?'<em>falta '+shortage.toLocaleString("pt-BR")+'</em>':'')+'</div>'+
       action+
     '</article>';
   }).join(""):'<div class="search-empty">Nenhum item encontrado.</div>';
@@ -1096,6 +1103,7 @@ function renderStockRows(){
 }
 
 document.getElementById("stockSearch")?.addEventListener("input",renderStockRows);
+const reservedPartSheet=document.getElementById("reservedPartSheet");
 const stockMovementSheet=document.getElementById("stockMovementSheet");
 
 function stockMovementLabel(type){
@@ -1107,7 +1115,7 @@ async function openStockMovement(itemId){
   document.getElementById("stockMoveItemId").value=item.id;
   document.getElementById("stockMoveName").textContent=item.name;
   document.getElementById("stockMoveMeta").textContent=(item.sku||budgetKindText(item.kind))+" · "+(item.unit||"un");
-  document.getElementById("stockMoveBalance").textContent=Number(item.stock_qty||0).toLocaleString("pt-BR")+" "+(item.unit||"un");
+  document.getElementById("stockMoveBalance").textContent=Number((item.available_qty??item.stock_qty)||0).toLocaleString("pt-BR")+" "+(item.unit||"un")+" disponíveis";
   document.getElementById("stockMoveType").value="entry";
   document.getElementById("stockMoveQty").value="1";
   document.getElementById("stockMoveCost").value="";
@@ -1152,6 +1160,45 @@ async function loadStockMovementHistory(itemId){
   ).join(""):'<div class="search-empty">Nenhuma movimentação registrada.</div>';
 }
 document.getElementById("stockMoveType")?.addEventListener("change",syncStockMoveFields);
+document.getElementById("reservedPartForm")?.addEventListener("submit",async event=>{
+  event.preventDefault();
+  if(!hasAnyPermission("stock.consume_all","stock.consume_assigned")) return toast("Seu perfil não pode confirmar instalação.");
+  const reservationId=document.getElementById("reservedPartId").value;
+  const qty=parseMoneyInput(document.getElementById("reservedPartQty").value);
+  const note=document.getElementById("reservedPartNote").value.trim();
+  const submit=event.currentTarget.querySelector('button[type="submit"]');
+  submit.disabled=true;
+  try{
+    const {error}=await supabaseClient.rpc("consume_reserved_stock",{
+      p_reservation_id:reservationId,
+      p_quantity:qty,
+      p_note:note||null
+    });
+    if(error){
+      if(String(error.message||"").includes("invalid_quantity")) toast("A quantidade precisa estar dentro do que está reservado.");
+      else if(String(error.message||"").includes("insufficient_stock")) toast("O saldo físico não é suficiente.");
+      else toast("Não foi possível confirmar a instalação.");
+      return;
+    }
+    closeSheets();
+    await refreshOpenOrderParts(reservedPartOrderId);
+    toast("Peça instalada e baixada do estoque.");
+  }finally{submit.disabled=false}
+});
+document.getElementById("releaseReservedPart")?.addEventListener("click",async()=>{
+  const reservationId=document.getElementById("reservedPartId").value;
+  const note=document.getElementById("reservedPartNote").value.trim()||"Peça não utilizada";
+  const btn=document.getElementById("releaseReservedPart");
+  btn.disabled=true;
+  try{
+    const {error}=await supabaseClient.rpc("release_reserved_stock",{p_reservation_id:reservationId,p_note:note});
+    if(error){toast("Não foi possível liberar a reserva.");return}
+    closeSheets();
+    await refreshOpenOrderParts(reservedPartOrderId);
+    toast("Reserva restante liberada.");
+  }finally{btn.disabled=false}
+});
+
 document.getElementById("stockMovementForm")?.addEventListener("submit",async event=>{
   event.preventDefault();
   if(!hasPermission("catalog.write")) return toast("Seu perfil não pode movimentar estoque.");
@@ -1180,7 +1227,8 @@ document.getElementById("stockMovementForm")?.addEventListener("submit",async ev
       p_unit_cost:hasPermission("finance.write")?cost:null
     });
     if(error){
-      if(String(error.message||"").includes("insufficient_stock")) toast("Saldo insuficiente para esse consumo.");
+      if(String(error.message||"").includes("stock_reserved_or_insufficient")) toast("Esse saldo está reservado para outra OS ou é insuficiente.");
+      else if(String(error.message||"").includes("insufficient_stock")) toast("Saldo insuficiente para esse consumo.");
       else if(String(error.message||"").includes("stock_not_enabled")) toast("Ative o controle de estoque deste item.");
       else toast("Não foi possível registrar a movimentação.");
       return;
@@ -1625,7 +1673,7 @@ function renderOrderDetailInto(detail,o,useDrawer=false){
   detail.innerHTML=
   '<article class="os-hero '+(useDrawer?'os-hero-drawer':'')+'">'+
     '<div class="os-cover"><div class="car-emoji">🚗</div><div class="os-cover-info"><span>'+o.ref+'</span><h1>'+escapeHtml(o.vehicle)+'</h1><span>'+escapeHtml(o.plate)+' · '+escapeHtml(o.customer)+'</span>'+statusBadge(o.status)+'</div></div>'+
-    '<div class="os-tabs"><button class="active" data-os-tab="summary">Resumo</button><button data-os-tab="inspection">Vistoria</button><button data-os-tab="estimate">Orçamento</button><button data-os-tab="history">Histórico</button></div>'+
+    '<div class="os-tabs"><button class="active" data-os-tab="summary">Resumo</button><button data-os-tab="inspection">Vistoria</button><button data-os-tab="estimate">Orçamento</button><button data-os-tab="parts">Peças</button><button data-os-tab="history">Histórico</button></div>'+
     '<div class="tab-content">'+
       '<section class="tab-pane active" data-pane="summary">'+
         '<div class="info-block"><span>Relato do cliente</span><b>'+escapeHtml(o.complaint||"Sem relato inicial")+'</b></div>'+
@@ -1641,6 +1689,7 @@ function renderOrderDetailInto(detail,o,useDrawer=false){
       '</section>'+
       '<section class="tab-pane" data-pane="inspection"><div class="os-inspection-content"><div class="inspection-loading">Carregando evidências…</div></div></section>'+
       '<section class="tab-pane" data-pane="estimate"><div class="info-block"><span>Orçamento</span><b>'+(o.status==="Em orçamento"?"Aguardando aprovação":"Disponível para consulta/edição")+'</b></div><div class="info-block"><span>Acesso rápido</span><b>Abra o orçamento sem perder o contexto desta OS.</b></div></section>'+
+      '<section class="tab-pane" data-pane="parts"><div class="os-parts-content"><div class="inspection-loading">Carregando peças reservadas…</div></div></section>'+
       '<section class="tab-pane" data-pane="history"><div class="os-history-list"><div class="history-loading">Carregando histórico…</div></div></section>'+
     '</div>'+
     '<div class="os-global-actions os-global-actions-v118">'+
@@ -1677,8 +1726,93 @@ function renderOrderDetailInto(detail,o,useDrawer=false){
 
   loadOrderHistoryInto(o,detail.querySelector(".os-history-list"));
   loadInspectionPhotosInto(o,detail.querySelector(".os-inspection-content"));
+  loadWorkOrderPartsInto(o,detail.querySelector(".os-parts-content"));
 }
 
+function partReservationState(row){
+  const required=Number(row.required_qty||0);
+  const reserved=Number(row.reserved_qty||0);
+  const consumed=Number(row.consumed_qty||0);
+  const released=Number(row.released_qty||0);
+  const shortage=Number(row.shortage_qty||0);
+  if(consumed>=required && required>0) return {label:"Instalada",cls:"done"};
+  if(shortage>0) return {label:"Falta "+shortage.toLocaleString("pt-BR"),cls:"shortage"};
+  if(consumed>0&&reserved>0) return {label:"Parcial",cls:"partial"};
+  if(reserved>0) return {label:"Reservada",cls:"reserved"};
+  if(released>0) return {label:"Liberada",cls:"released"};
+  return {label:"Pendente",cls:"pending"};
+}
+async function loadWorkOrderPartsInto(order,target){
+  if(!target) return;
+  if(!(order.server&&staffProfile?.active&&supabaseClient)){
+    target.innerHTML='<div class="search-empty">As reservas de peças aparecem após a aprovação real do orçamento.</div>';
+    return;
+  }
+  target.innerHTML='<div class="inspection-loading">Carregando peças reservadas…</div>';
+  const {data,error}=await supabaseClient.rpc("work_order_parts",{p_work_order_id:order.id});
+  if(error){
+    target.innerHTML='<div class="search-empty">Não foi possível carregar as peças desta OS.</div>';
+    return;
+  }
+  const rows=data||[];
+  rows.forEach(row=>workOrderPartsCache.set(String(row.reservation_id),{...row,work_order_id:order.id}));
+  if(!rows.length){
+    target.innerHTML='<div class="parts-empty"><b>Nenhuma peça reservada</b><span>Somente itens vinculados ao catálogo e com controle de estoque entram na reserva automática.</span></div>';
+    return;
+  }
+  const canHandle=hasAnyPermission("stock.consume_all","stock.consume_assigned");
+  target.innerHTML='<div class="parts-summary"><span>'+rows.length+' item'+(rows.length===1?"":"s")+' controlado'+(rows.length===1?"":"s")+'</span><small>Reserva na aprovação · baixa quando instalada</small></div>'+
+    '<div class="os-parts-list">'+rows.map(row=>{
+      const state=partReservationState(row);
+      const required=Number(row.required_qty||0);
+      const reserved=Number(row.reserved_qty||0);
+      const consumed=Number(row.consumed_qty||0);
+      const shortage=Number(row.shortage_qty||0);
+      const remaining=Math.max(0,required-consumed-Number(row.released_qty||0));
+      return '<article class="os-part-row '+state.cls+'">'+
+        '<div class="os-part-copy"><div><b>'+escapeHtml(row.item_name)+'</b><span class="part-state '+state.cls+'">'+escapeHtml(state.label)+'</span></div>'+
+          '<small>'+escapeHtml(row.sku||"Sem código")+' · necessário '+required.toLocaleString("pt-BR")+' '+escapeHtml(row.unit||"un")+'</small>'+
+          '<div class="part-progress"><span style="width:'+Math.min(100,required?consumed/required*100:0)+'%"></span></div>'+
+          '<em>instalado '+consumed.toLocaleString("pt-BR")+' · reservado '+reserved.toLocaleString("pt-BR")+(shortage>0?' · faltando '+shortage.toLocaleString("pt-BR"):'')+'</em>'+
+        '</div>'+
+        (canHandle&&remaining>0
+          ? '<div class="os-part-actions">'+
+              (reserved>0?'<button type="button" class="part-install" data-install-reservation="'+row.reservation_id+'">Instalar</button>':'')+
+              '<button type="button" class="part-release" data-release-reservation="'+row.reservation_id+'">Liberar</button>'+
+            '</div>'
+          : '')+
+      '</article>';
+    }).join("")+'</div>';
+
+  target.querySelectorAll("[data-install-reservation]").forEach(btn=>btn.addEventListener("click",()=>openReservedPartOperation(btn.dataset.installReservation,order.id)));
+  target.querySelectorAll("[data-release-reservation]").forEach(btn=>btn.addEventListener("click",()=>releaseReservedPartDirect(btn.dataset.releaseReservation,order.id)));
+}
+async function openReservedPartOperation(reservationId,orderId){
+  const row=workOrderPartsCache.get(String(reservationId));
+  if(!row) return;
+  reservedPartOrderId=orderId;
+  document.getElementById("reservedPartId").value=row.reservation_id;
+  document.getElementById("reservedPartName").textContent=row.item_name;
+  document.getElementById("reservedPartMeta").textContent=(row.sku||"Sem código")+" · "+(row.unit||"un");
+  document.getElementById("reservedPartAvailable").textContent=Number(row.reserved_qty||0).toLocaleString("pt-BR")+" "+(row.unit||"un")+" reservados";
+  document.getElementById("reservedPartQty").value=Number(row.reserved_qty||0).toLocaleString("pt-BR");
+  document.getElementById("reservedPartNote").value="";
+  openSheet(reservedPartSheet);
+}
+async function refreshOpenOrderParts(orderId){
+  const order=allOrders().find(o=>String(o.id)===String(orderId));
+  if(!order) return;
+  const target=document.querySelector("#desktopOsDrawerContent .os-parts-content")||document.querySelector(".view[data-view='detail'].active .os-parts-content");
+  if(target) await loadWorkOrderPartsInto(order,target);
+  if(currentView==="stock") await renderStock();
+}
+async function releaseReservedPartDirect(reservationId,orderId){
+  if(!hasAnyPermission("stock.consume_all","stock.consume_assigned")) return toast("Seu perfil não pode liberar reservas.");
+  const {error}=await supabaseClient.rpc("release_reserved_stock",{p_reservation_id:reservationId,p_note:"Peça não utilizada"});
+  if(error){toast("Não foi possível liberar a reserva.");return}
+  await refreshOpenOrderParts(orderId);
+  toast("Reserva liberada.");
+}
 async function loadOrderHistoryInto(order,target){
   if(!target) return;
   let rows=[];
@@ -3641,13 +3775,13 @@ const staffMemberSheet=document.getElementById("staffMemberSheet");
 
 function openSheet(sheet){
   if(!sheet) return;
-  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,manualPaymentSheet,settleExpenseSheet,stockMovementSheet,staffAuthSheet,pixPaymentSheet,osQuickSheet,budgetItemSheet,budgetSendSheet,staffInviteSheet,staffMemberSheet].forEach(s=>{if(s && s!==sheet)s.hidden=true});
+  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,manualPaymentSheet,settleExpenseSheet,reservedPartSheet,stockMovementSheet,staffAuthSheet,pixPaymentSheet,osQuickSheet,budgetItemSheet,budgetSendSheet,staffInviteSheet,staffMemberSheet].forEach(s=>{if(s && s!==sheet)s.hidden=true});
   sheet.hidden=false;
   document.body.classList.add("sheet-open");
   document.body.classList.remove("no-scroll");
 }
 function closeSheets(){
-  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,manualPaymentSheet,settleExpenseSheet,stockMovementSheet,staffAuthSheet,pixPaymentSheet,osQuickSheet,budgetItemSheet,budgetSendSheet,staffInviteSheet,staffMemberSheet].forEach(s=>{if(s)s.hidden=true});
+  [quickActionSheet,moreSheet,searchSheet,financeReceiptSheet,financeExpenseSheet,manualPaymentSheet,settleExpenseSheet,reservedPartSheet,stockMovementSheet,staffAuthSheet,pixPaymentSheet,osQuickSheet,budgetItemSheet,budgetSendSheet,staffInviteSheet,staffMemberSheet].forEach(s=>{if(s)s.hidden=true});
   document.body.classList.remove("sheet-open");
   queueScrollLock();
 }
