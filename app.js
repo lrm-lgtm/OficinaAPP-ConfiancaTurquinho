@@ -3022,8 +3022,8 @@ async function createMercadoPagoPix(){
     pixProviderStatus.textContent="Informe o e-mail do pagador.";
     return;
   }
-  if(![11,14].includes(payerDigits.length)){
-    pixProviderStatus.textContent="Informe um CPF ou CNPJ com 11 ou 14 dígitos.";
+  if(payerDigits.length!==11){
+    pixProviderStatus.textContent="Informe um CPF com 11 dígitos.";
     return;
   }
 
@@ -3068,7 +3068,7 @@ async function createMercadoPagoPix(){
       }else if(payload.error==="invalid_payer_email"){
         pixProviderStatus.textContent="Confira o e-mail do pagador.";
       }else if(payload.error==="invalid_payer_document"){
-        pixProviderStatus.textContent="Informe um CPF ou CNPJ com 11 ou 14 dígitos.";
+        pixProviderStatus.textContent="Informe um CPF com 11 dígitos.";
       }else if(payload.error==="payment_request_processing"){
         pixProviderStatus.textContent="Já existe um Pix sendo criado para este recebimento. Aguarde alguns instantes e tente abrir novamente.";
       }else if(payload.error==="work_order_closed"){
