@@ -280,7 +280,7 @@ const toastEl=document.getElementById("toast");
 const appBack=document.getElementById("appBack");
 let currentView="dashboard";
 let previousView="dashboard";
-let currentFilter="all";
+let currentFilter="active";
 let currentKanbanStage="today";
 let currentKanbanHealth="";
 let currentMechanicFilter="active";
@@ -365,6 +365,8 @@ function serverStatusLabel(status){
   })[status]||status||"Aberta";
 }
 function serverStageLabel(row){
+  if(row.status==="delivered") return "Entregue";
+  if(row.status==="cancelled") return "Cancelada";
   if(row.status==="waiting_approval") return "Aguardando aprovação";
   if(row.status==="ready") return "Aguardando retirada";
   if(row.operational_state==="waiting_parts") return "Aguardando peça";
@@ -406,7 +408,7 @@ function mapServerOrder(row){
     km:row.vehicle_km
   };
   const vehicleText=[vehicle.make,vehicle.model,vehicle.version].filter(Boolean).join(" ")||"Veículo a completar";
-  const kind=row.status==="ready"?"ready":["approved","in_service"].includes(row.status)?"service":"waiting";
+  const kind=["delivered","cancelled"].includes(row.status)?"closed":row.status==="ready"?"ready":["approved","in_service"].includes(row.status)?"service":"waiting";
   return {
     id:row.id,
     server:true,
@@ -755,7 +757,16 @@ function allClients(){
   return [...JSON.parse(localStorage.getItem("oficina-clients")||"[]"),...demoClients];
 }
 
+function isClosedOrder(o){
+  const status=String(o?.raw?.status||o?.status||"").toLowerCase();
+  return o?.kind==="closed" || status==="delivered" || status==="cancelled" || /entregue|cancelada/.test(status);
+}
+function activeOrders(){
+  return allOrders().filter(o=>!isClosedOrder(o));
+}
+
 function contextualAction(o){
+  if(isClosedOrder(o)) return "Ver histórico";
   if(/aprovação|orçamento/i.test(o.stage+" "+o.status)) return "Enviar link";
   if(/execução|liberado/i.test(o.stage+" "+o.status)) return "Abrir";
   if(/pronta|retirada/i.test(o.stage+" "+o.status)) return "Entrega";
@@ -769,7 +780,7 @@ function orderCard(o){
       '<div class="compact-order-copy"><b>'+escapeHtml(o.vehicle)+'</b><span>'+escapeHtml(o.customer)+' · '+escapeHtml(o.stage)+'</span></div>'+
       statusBadge(o.status)+
     '</button>'+
-    '<div class="compact-card-actions"><button class="context-action" data-order-action="'+o.id+'">'+contextualAction(o)+'</button><button class="compact-quick" data-quick-os="'+o.id+'" aria-label="Atualizar andamento">•••</button></div>'+
+    '<div class="compact-card-actions"><button class="context-action" data-order-action="'+o.id+'">'+contextualAction(o)+'</button>'+(isClosedOrder(o)?'':'<button class="compact-quick" data-quick-os="'+o.id+'" aria-label="Atualizar andamento">•••</button>')+'</div>'+
   '</article>';
 }
 
@@ -805,6 +816,7 @@ function kanbanHealth(o){
 function kanbanStage(o){
   const raw=o.raw||{};
   const status=String(raw.status||"").toLowerCase();
+  if(status==="delivered"||status==="cancelled"||isClosedOrder(o)) return "closed";
   const operational=String(raw.operational_state||"").toLowerCase();
   const text=(o.stage+" "+o.status).toLowerCase();
 
@@ -851,6 +863,9 @@ function healthTimingLabel(o){
 }
 
 function healthInfo(o){
+  const rawStatus=String(o?.raw?.status||"").toLowerCase();
+  if(rawStatus==="delivered") return {label:"Entregue",cls:"ready",icon:"✓"};
+  if(rawStatus==="cancelled") return {label:"Cancelada",cls:"blocked",icon:"×"};
   const health=kanbanHealth(o);
   const map={
     overdue:{label:"Atrasada",cls:"danger",icon:"●"},
@@ -925,6 +940,7 @@ function filteredKanbanOrders(orders){
 }
 
 function renderKanban(orders){
+  orders=(orders||[]).filter(o=>!isClosedOrder(o));
   const board=document.getElementById("kanbanBoard");
   if(!board) return;
 
@@ -1002,7 +1018,7 @@ function renderKanban(orders){
     btn.onclick=()=>{
       currentKanbanStage=btn.dataset.stageFilter;
       currentKanbanHealth="";
-      renderKanban(allOrders());
+      renderKanban(activeOrders());
       queueScrollLock();
     };
   });
@@ -1012,18 +1028,17 @@ function renderKanban(orders){
     btn.classList.toggle("active",filter===currentKanbanHealth);
     btn.onclick=()=>{
       currentKanbanHealth=currentKanbanHealth===filter?"":filter;
-      renderKanban(allOrders());
+      renderKanban(activeOrders());
       queueScrollLock();
     };
   });
 }
 
 function renderDashboard(){
-  const orders=allOrders();
-  const open=orders.filter(o=>o.kind!=="ready");
+  const orders=activeOrders();
   const budgets=orders.filter(o=>/aprovação|orçamento|revisão/i.test(o.stage+" "+o.status));
   const service=orders.filter(o=>/execução|liberado|aprovado/i.test(o.stage+" "+o.status));
-  document.getElementById("openCount").textContent=open.length;
+  document.getElementById("openCount").textContent=orders.length;
   const budgetCount=document.getElementById("budgetCount");
   const serviceCount=document.getElementById("serviceCount");
   if(budgetCount) budgetCount.textContent=budgets.length;
@@ -1031,7 +1046,7 @@ function renderDashboard(){
 
   renderKanban(orders);
   const dashboardOrders=document.getElementById("dashboardOrders");
-  if(dashboardOrders) dashboardOrders.innerHTML=open.slice(0,3).map(orderCard).join("");
+  if(dashboardOrders) dashboardOrders.innerHTML=orders.slice(0,3).map(orderCard).join("");
   bindOrderOpeners();
   queueScrollLock();
 }
@@ -1047,7 +1062,7 @@ function desktopOrderRow(o){
       '<div><span class="desktop-health '+health.cls+'">'+health.label+(timing?' · '+escapeHtml(timing):'')+'</span></div>'+
       '<div><b>'+escapeHtml(o.promised||"A definir")+'</b><small>'+escapeHtml(o.owner||"Equipe")+'</small></div>'+
     '</button>'+
-    '<div class="desktop-os-actions"><button data-order-action="'+o.id+'">'+contextualAction(o)+'</button><button data-quick-os="'+o.id+'">•••</button></div>'+
+    '<div class="desktop-os-actions"><button data-order-action="'+o.id+'">'+contextualAction(o)+'</button>'+(isClosedOrder(o)?'':'<button data-quick-os="'+o.id+'">•••</button>')+'</div>'+
   '</article>';
 }
 function desktopOrdersTable(list){
@@ -1060,7 +1075,12 @@ function desktopOrdersTable(list){
 function renderOrders(){
   const q=(document.getElementById("orderSearch")?.value||"").toLowerCase().trim();
   const list=allOrders().filter(o=>{
-    const filterOk=currentFilter==="all"||o.kind===currentFilter;
+    const closed=isClosedOrder(o);
+    const filterOk=currentFilter==="closed"
+      ? closed
+      : currentFilter==="active"
+        ? !closed
+        : !closed && o.kind===currentFilter;
     const qOk=!q||[o.ref,o.plate,o.vehicle,o.customer,o.status,o.stage].join(" ").toLowerCase().includes(q);
     return filterOk&&qOk;
   });
@@ -1915,7 +1935,7 @@ function renderOrderDetailInto(detail,o,useDrawer=false){
       '<section class="tab-pane" data-pane="history"><div class="os-history-list"><div class="history-loading">Carregando histórico…</div></div></section>'+
     '</div>'+
     '<div class="os-global-actions os-global-actions-v118">'+
-      '<button class="btn secondary full os-progress-shortcut" data-update-progress><span>↻</span>Atualizar andamento</button>'+
+      (isClosedOrder(o)?'':'<button class="btn secondary full os-progress-shortcut" data-update-progress><span>↻</span>Atualizar andamento</button>')+
       '<button class="btn primary full os-budget-shortcut" data-open-budget><span>R$</span>'+budgetActionLabel(o)+'</button>'+
     '</div>'+
   '</article>';
@@ -3817,6 +3837,7 @@ function setQuickState(state){
 }
 function openOsQuickSheet(id){
   const order=allOrders().find(o=>String(o.id)===String(id));
+  if(order&&isClosedOrder(order)){toast("Esta OS já está encerrada.");return}
   if(!order) return;
   osQuickSelectedId=order.id;
   const raw=order.raw||{};
