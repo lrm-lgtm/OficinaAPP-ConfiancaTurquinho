@@ -7,7 +7,7 @@
   <meta name="description" content="Auto Mecânica Confiança — gestão de oficina">
   <title>Auto Mecânica Confiança</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=15.1">
+  <link rel="stylesheet" href="./styles.css?v=15.2">
 </head>
 <body>
   <header class="appbar">
@@ -149,7 +149,7 @@
 
     <section class="view" data-view="new-os">
       <div class="wizard-head">
-        <span class="muted">Nova Ordem de Serviço</span>
+        <span class="muted" id="wizardModeLabel">Nova Ordem de Serviço</span>
         <h1 id="wizardTitle">Cliente</h1>
         <div class="wizard-steps">
           <button class="active" data-step-nav="1"><i>1</i><span>Cliente</span></button>
@@ -217,7 +217,7 @@
             <dl id="wizardSummary"></dl>
             <label class="check-option"><input type="checkbox" id="goBudgetAfterCreate"><span>Criar OS e ir para o orçamento</span></label>
           </div>
-          <div class="wizard-actions"><button class="btn secondary" type="button" data-prev="3">Voltar</button><button class="btn primary" type="submit">Criar Ordem de Serviço</button></div>
+          <div class="wizard-actions"><button class="btn secondary" type="button" data-prev="3">Voltar</button><button class="btn primary" type="submit" id="wizardSubmitBtn">Criar Ordem de Serviço</button></div>
         </section>
       </form>
     </section>
@@ -896,6 +896,6 @@
 
   <div class="toast" id="toast"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./app.js?v=15.1"></script>
+  <script src="./app.js?v=15.2"></script>
 </body>
 </html>

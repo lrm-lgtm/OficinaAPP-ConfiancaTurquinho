@@ -292,6 +292,7 @@ let financeTransactions=[];
 let financeReceivables=[];
 let wizardStep=1;
 let requiredPhotos=new Set();
+let completingQuickOrderId=null;
 let deferredPrompt=null;
 
 function toast(message){
@@ -339,7 +340,7 @@ function go(name){
   queueScrollLock();
 }
 
-document.querySelectorAll("[data-go]").forEach(btn=>btn.addEventListener("click",()=>go(btn.dataset.go)));
+document.querySelectorAll("[data-go]").forEach(btn=>btn.addEventListener("click",()=>{if(btn.dataset.go==="new-os") resetWizard();go(btn.dataset.go)}));
 appBack.addEventListener("click",()=>go(previousView==="client-approval"?"budget":previousView||"dashboard"));
 
 function statusBadge(status){
@@ -529,6 +530,73 @@ async function uploadInspectionPhotos(workOrderId){
     if(error) throw error;
   }
 }
+async function uploadQuickCompletionPhotos(workOrderId){
+  const {data:existingRows,error:existingError}=await supabaseClient
+    .from("inspection_photos")
+    .select("slot,phase")
+    .eq("work_order_id",workOrderId)
+    .eq("phase","entry");
+  if(existingError) throw existingError;
+
+  const existingRequired=new Set((existingRows||[]).map(row=>row.slot));
+  const rows=[];
+  for(const card of document.querySelectorAll(".capture-card")){
+    const input=card.querySelector("input");
+    const file=input?.files?.[0];
+    if(!file) continue;
+
+    const slot=card.dataset.slot||"other";
+    if(card.classList.contains("required") && existingRequired.has(slot)) continue;
+
+    const ext=(file.name.split(".").pop()||"jpg").toLowerCase().replace(/[^a-z0-9]/g,"")||"jpg";
+    const storagePath=workOrderId+"/entry/"+slot+"-"+crypto.randomUUID()+"."+ext;
+    const {error:uploadError}=await supabaseClient.storage
+      .from("oficina-evidence")
+      .upload(storagePath,file,{contentType:file.type||"image/jpeg",upsert:false});
+    if(uploadError) throw uploadError;
+
+    rows.push({
+      work_order_id:workOrderId,
+      phase:"entry",
+      slot,
+      storage_path:storagePath,
+      required:card.classList.contains("required")
+    });
+  }
+
+  if(rows.length){
+    const {error}=await supabaseClient.from("inspection_photos").insert(rows);
+    if(error) throw error;
+  }
+}
+
+async function completeQuickOrderOnServer(fd){
+  const order=allOrders().find(o=>String(o.id)===String(completingQuickOrderId));
+  if(!(order?.server&&staffProfile?.active&&supabaseClient)) throw new Error("quick_order_not_available");
+
+  const customerId=order.raw?.customer_id;
+  if(!customerId) throw new Error("quick_order_customer_missing");
+
+  const vehicle=await findOrCreateServerVehicle(customerId,fd);
+  await uploadQuickCompletionPhotos(order.id);
+
+  const kmRaw=parseInt(String(fd.get("km")||"").replace(/\D/g,""),10);
+  const complaint=String(fd.get("complaint")||"").trim()||order.complaint||"Sem relato inicial";
+
+  const {data,error}=await supabaseClient.rpc("complete_quick_work_order",{
+    p_work_order_id:order.id,
+    p_vehicle_id:vehicle?.id||null,
+    p_complaint:complaint,
+    p_current_km:Number.isFinite(kmRaw)?kmRaw:null
+  });
+  if(error) throw error;
+
+  await syncServerData({quiet:true});
+  const mapped=serverOrders.find(o=>String(o.id)===String(order.id));
+  toast("OS rápida completada sem criar outra OS.");
+  return mapped||{...order,raw:{...(order.raw||{}),status:"budget"},status:"Em orçamento",stage:"Orçamento"};
+}
+
 async function persistOrderToServer(fd,quick){
   const customerName=String(fd.get("customer")||"").trim();
   const customer=await findOrCreateServerCustomer(customerName);
@@ -605,6 +673,7 @@ function historyLabel(eventType){
   return ({
     work_order_created:"OS criada",
     work_order_quick_created:"OS rápida criada",
+    work_order_quick_completed:"OS rápida completada",
     kanban_fields_initialized:"Prazo operacional iniciado",
     work_order_operational_updated:"Andamento atualizado",
     budget_approved:"Orçamento aprovado pelo cliente",
@@ -623,6 +692,7 @@ function historyLabel(eventType){
 }
 function historyDetail(row){
   const p=row.payload||{};
+  if(row.event_type==="work_order_quick_completed") return "Cadastro, veículo e vistoria de entrada concluídos na mesma OS.";
   if(row.event_type==="work_order_operational_updated"){
     const bits=[];
     if(p.reason) bits.push(p.reason);
@@ -1694,6 +1764,14 @@ wizard.addEventListener("submit",async e=>{
 });
 
 async function createOrder(fd,quick){
+  if(!quick && completingQuickOrderId && staffProfile?.active && supabaseClient){
+    try{
+      return await completeQuickOrderOnServer(fd);
+    }catch(error){
+      toast("Não foi possível completar esta OS. As fotos já enviadas foram preservadas.");
+      return null;
+    }
+  }
   if(staffProfile?.active && supabaseClient){
     try{
       return await persistOrderToServer(fd,quick);
@@ -1731,12 +1809,64 @@ async function createOrder(fd,quick){
   return order;
 }
 function resetWizard(){
+  completingQuickOrderId=null;
   wizard.reset();requiredPhotos.clear();
+  document.getElementById("wizardModeLabel").textContent="Nova Ordem de Serviço";
+  document.getElementById("wizardSubmitBtn").textContent="Criar Ordem de Serviço";
+  document.getElementById("wizCustomer").readOnly=false;
+  document.getElementById("pickExistingClient").hidden=false;
+  document.getElementById("quickCreate").hidden=false;
   document.querySelectorAll(".capture-card").forEach(card=>{
     card.classList.remove("captured");
+    const input=card.querySelector("input");
+    if(input){input.disabled=false;input.value=""}
     card.querySelector(".capture-preview").innerHTML='<span>'+(card.classList.contains("optional")?"＋":"📷")+'</span>';
   });
   updatePhotoProgress();setWizardStep(1);
+}
+
+async function loadQuickCompletionPhotos(order){
+  if(!(order?.server&&staffProfile?.active&&supabaseClient)) return;
+  const {data,error}=await supabaseClient
+    .from("inspection_photos")
+    .select("slot")
+    .eq("work_order_id",order.id)
+    .eq("phase","entry")
+    .eq("required",true);
+  if(error) return;
+  const existing=new Set((data||[]).map(row=>row.slot));
+  document.querySelectorAll(".capture-card.required").forEach(card=>{
+    const slot=card.dataset.slot;
+    if(!existing.has(slot)) return;
+    requiredPhotos.add(slot);
+    card.classList.add("captured");
+    const input=card.querySelector("input");
+    if(input) input.disabled=true;
+    card.querySelector(".capture-preview").innerHTML="<span>✓</span>";
+  });
+  updatePhotoProgress();
+}
+
+async function startQuickOrderCompletion(order){
+  resetWizard();
+  completingQuickOrderId=order.id;
+  document.getElementById("wizardModeLabel").textContent="Completar "+order.ref;
+  document.getElementById("wizardSubmitBtn").textContent="Salvar cadastro e vistoria";
+  const customer=document.getElementById("wizCustomer");
+  customer.value=order.customer;
+  customer.readOnly=true;
+  document.getElementById("pickExistingClient").hidden=true;
+  document.getElementById("quickCreate").hidden=true;
+
+  wizard.elements.plate.value=order.plate==="SEM PLACA"?"":order.plate;
+  wizard.elements.vehicle.value=order.vehicle==="Veículo a completar"?"":order.vehicle;
+  wizard.elements.year.value=order.raw?.vehicle_year||"";
+  wizard.elements.km.value=order.raw?.current_km||order.raw?.vehicle_km||"";
+  wizard.elements.complaint.value=order.complaint==="Sem relato inicial"?"":order.complaint;
+
+  go("new-os");
+  setWizardStep(2);
+  await loadQuickCompletionPhotos(order);
 }
 
 function budgetActionLabel(o){
@@ -1805,16 +1935,8 @@ function renderOrderDetailInto(detail,o,useDrawer=false){
   });
 
   detail.querySelector("[data-complete-entry]")?.addEventListener("click",()=>{
-    document.getElementById("wizCustomer").value=o.customer;
-    const plate=wizard.elements.plate;
-    const vehicle=wizard.elements.vehicle;
-    const complaint=wizard.elements.complaint;
-    plate.value=o.plate==="SEM PLACA"?"":o.plate;
-    vehicle.value=o.vehicle==="Veículo a completar"?"":o.vehicle;
-    complaint.value=o.complaint==="Sem relato inicial"?"":o.complaint;
     if(useDrawer) closeDesktopOsDrawer();
-    go("new-os");
-    setWizardStep(2);
+    startQuickOrderCompletion(o);
   });
 
   loadOrderHistoryInto(o,detail.querySelector(".os-history-list"));
@@ -4134,6 +4256,7 @@ document.getElementById("globalSearchBtn")?.addEventListener("click",()=>{
   setTimeout(()=>document.getElementById("globalSearchInput")?.focus(),80);
 });
 document.querySelectorAll("[data-sheet-go]").forEach(btn=>btn.addEventListener("click",()=>{
+  if(btn.dataset.sheetGo==="new-os") resetWizard();
   closeSheets();go(btn.dataset.sheetGo);
 }));
 document.querySelector("[data-sheet-client]")?.addEventListener("click",()=>{
