@@ -694,7 +694,9 @@ function historyLabel(eventType){
     work_order_cancelled:"OS cancelada",
     cancellation_stock_resolved:"Acerto de estoque",
     cancellation_payment_resolved:"Acerto financeiro",
-    cancellation_provider_payment_cancelled:"Cobrança Pix cancelada"
+    cancellation_provider_payment_cancelled:"Cobrança Pix cancelada",
+    approval_link_created:"Link de aprovação criado",
+    approval_link_renewed:"Link de aprovação renovado"
   })[eventType]||"Atualização da OS";
 }
 function historyDetail(row){
@@ -2315,14 +2317,16 @@ async function loadServerBudget(order){
 
   const {data:token}=await supabaseClient
     .from("approval_tokens")
-    .select("token,revoked_at")
+    .select("token,expires_at,revoked_at")
     .eq("budget_revision_id",latest.id)
-    .is("revoked_at",null)
     .maybeSingle();
 
   currentBudgetRevision=latest;
   currentBudgetItems=items||[];
-  currentApprovalToken=token?.token||null;
+  const tokenActive=token
+    && !token.revoked_at
+    && (!token.expires_at || new Date(token.expires_at).getTime()>Date.now());
+  currentApprovalToken=tokenActive?token.token:null;
 }
 async function loadLocalBudget(order){
   if(REAL_MODE) throw new Error("real_mode_requires_server");
@@ -2688,16 +2692,14 @@ async function sendBudgetForApproval(paymentMode=currentBudgetRevision?.payment_
       if(termsError) throw termsError;
       currentBudgetRevision=updated;
     }
-    let token=currentApprovalToken;
-    if(!token){
-      const {data,error}=await supabaseClient.from("approval_tokens").insert({
-        budget_revision_id:currentBudgetRevision.id,
-        expires_at:new Date(Date.now()+30*24*60*60*1000).toISOString()
-      }).select("token").single();
-      if(error) throw error;
-      token=data.token;
-      currentApprovalToken=token;
-    }
+    const {data:tokenRows,error:tokenError}=await supabaseClient.rpc("ensure_approval_token",{
+      p_budget_revision_id:currentBudgetRevision.id
+    });
+    if(tokenError) throw tokenError;
+    const tokenRow=Array.isArray(tokenRows)?tokenRows[0]:tokenRows;
+    const token=tokenRow?.token||null;
+    if(!token) throw new Error("approval_token_missing");
+    currentApprovalToken=token;
     await supabaseClient.from("work_orders").update({
       status:"waiting_approval",
       operational_state:"waiting_customer",
@@ -2727,7 +2729,7 @@ async function sendBudgetForApproval(paymentMode=currentBudgetRevision?.payment_
     toast("Não foi possível gerar um token de aprovação.");
     return;
   }
-  const link=location.origin+location.pathname+"?approval="+encodeURIComponent(currentApprovalToken)+"&v=12.5#aprovar";
+  const link=location.origin+location.pathname+"?approval="+encodeURIComponent(currentApprovalToken)+"&v=15.9#aprovar";
   try{await navigator.clipboard.writeText(link);toast("Link da revisão atual copiado.");}
   catch{toast("Revisão pronta para compartilhar.");}
 }
