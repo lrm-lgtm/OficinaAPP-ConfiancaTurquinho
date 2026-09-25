@@ -1776,6 +1776,7 @@ function renderOrderDetailInto(detail,o,useDrawer=false){
           '<div><span>Previsão atual</span><b>'+escapeHtml(o.forecast||"A definir")+'</b></div>'+
         '</div>'+
         (o.blockedReason?'<div class="info-block operational-alert"><span>Motivo / bloqueio</span><b>'+escapeHtml(o.blockedReason)+'</b></div>':'')+
+        (String(o.raw?.status||"").toLowerCase()==="ready"&&hasPermission("work_orders.write_all")?'<button class="btn success full" data-deliver-os>✓ Registrar entrega do veículo</button>':'')+
         (o.quick?'<button class="btn primary full" data-complete-entry>Completar cadastro e vistoria</button>':'')+
       '</section>'+
       '<section class="tab-pane" data-pane="inspection"><div class="os-inspection-content"><div class="inspection-loading">Carregando evidências…</div></div></section>'+
@@ -1796,6 +1797,7 @@ function renderOrderDetailInto(detail,o,useDrawer=false){
   }));
 
   detail.querySelector("[data-update-progress]")?.addEventListener("click",()=>openOsQuickSheet(o.id));
+  detail.querySelector("[data-deliver-os]")?.addEventListener("click",()=>openDeliverySheet(o.id));
   detail.querySelector("[data-open-budget]")?.addEventListener("click",()=>{
     selectedBudgetOrderId=o.id;
     if(useDrawer) closeDesktopOsDrawer();
