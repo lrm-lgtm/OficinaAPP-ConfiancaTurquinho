@@ -3923,7 +3923,16 @@ async function saveOsQuickUpdate(){
       if(document.body.classList.contains("desktop-drawer-open")) openDetail(order.id);
       toast("Andamento atualizado no servidor.");
     }catch(error){
-      toast("Não foi possível atualizar a OS.");
+      const message=String(error?.message||error||"");
+      if(message.includes("ready_requires_approved_work")){
+        toast("Só é possível marcar como Pronta após a aprovação e execução do serviço.");
+      }else if(message.includes("unresolved_stock_reservations")){
+        toast("Ainda há peça pendente. Instale ou libere a reserva antes de marcar como Pronta.");
+      }else if(message.includes("closed_work_order_immutable")){
+        toast("Esta OS já está encerrada.");
+      }else{
+        toast("Não foi possível atualizar a OS.");
+      }
     }finally{
       saveBtn.disabled=false;
     }
