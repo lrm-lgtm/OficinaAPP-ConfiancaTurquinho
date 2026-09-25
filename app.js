@@ -2832,22 +2832,20 @@ async function createMercadoPagoPix(){
     openSheet(staffAuthSheet);
     return;
   }
+  if(!hasPermission("finance.write")){
+    pixProviderStatus.textContent="Seu perfil não possui permissão para gerar cobranças.";
+    return;
+  }
 
   const payerEmail=document.getElementById("pixPayerEmail").value.trim();
   const payerDocument=document.getElementById("pixPayerDocument").value.trim();
-  const amount=Number(budget.total||0);
-  const order=budget.order||{};
-  let receivableId=null;
-  if(staffProfile?.active && supabaseClient && budget.id){
-    const {data:receivable}=await supabaseClient
-      .from("receivables")
-      .select("id")
-      .eq("budget_revision_id",budget.id)
-      .maybeSingle();
-    receivableId=receivable?.id||null;
+  const payerDigits=payerDocument.replace(/\D/g,"");
+  if(!payerEmail){
+    pixProviderStatus.textContent="Informe o e-mail do pagador.";
+    return;
   }
-  if(!payerEmail || amount<=0){
-    pixProviderStatus.textContent="Informe o e-mail do pagador e confira o valor.";
+  if(![11,14].includes(payerDigits.length)){
+    pixProviderStatus.textContent="Informe um CPF ou CNPJ válido para gerar o Pix.";
     return;
   }
 
@@ -2862,19 +2860,27 @@ async function createMercadoPagoPix(){
         "apikey":V11_SUPABASE_PUBLISHABLE_KEY
       },
       body:JSON.stringify({
-        work_order_id:order.id,
         budget_revision_id:budget.id,
-        receivable_id:receivableId,
-        amount,
         payer_email:payerEmail,
-        payer_document:payerDocument,
-        description:"Auto Mecânica Confiança · OS #"+String(order.number||"")
+        payer_document:payerDigits
       })
     });
     const payload=await response.json();
     if(!response.ok){
       if(payload.error==="provider_not_configured"){
         pixProviderStatus.textContent="Mercado Pago preparado, mas ainda falta conectar as credenciais da conta.";
+      }else if(payload.error==="finance_write_required"){
+        pixProviderStatus.textContent="Seu perfil não possui permissão para gerar cobranças.";
+      }else if(payload.error==="budget_not_approved"){
+        pixProviderStatus.textContent="O Pix só pode ser gerado depois da aprovação do orçamento.";
+      }else if(payload.error==="receivable_not_found"){
+        pixProviderStatus.textContent="O contas a receber desta aprovação ainda não foi criado.";
+      }else if(payload.error==="receivable_already_paid"){
+        pixProviderStatus.textContent="Esta cobrança já está quitada.";
+      }else if(payload.error==="invalid_payer_document"){
+        pixProviderStatus.textContent="Informe um CPF ou CNPJ válido.";
+      }else if(payload.error==="payment_request_processing"){
+        pixProviderStatus.textContent="Já existe uma cobrança sendo criada para este recebimento.";
       }else if(payload.error==="staff_access_required"){
         pixProviderStatus.textContent="Seu usuário ainda não foi liberado para operações internas.";
       }else{
@@ -2890,8 +2896,11 @@ async function createMercadoPagoPix(){
       qr.src="data:image/png;base64,"+payload.pix.qr_code_base64;
       qr.hidden=false;
     }else qr.hidden=true;
+    if(payload.amount) document.getElementById("pixPaymentAmount").textContent=moneyBR(payload.amount);
     pixResult.hidden=false;
-    pixProviderStatus.textContent="Cobrança criada. Status: "+payload.status+".";
+    pixProviderStatus.textContent=payload.reused
+      ?"Cobrança Pix existente reutilizada. Status: "+payload.status+"."
+      :"Cobrança criada. Status: "+payload.status+".";
   }catch(error){
     pixProviderStatus.textContent="Não foi possível falar com o gateway agora.";
   }finally{
