@@ -617,7 +617,8 @@ function historyLabel(eventType){
     expense_settled:"Despesa baixada",
     stock_movement_recorded:"Movimentação de estoque",
     reserved_part_consumed:"Peça instalada",
-    reserved_part_released:"Reserva de peça liberada"
+    reserved_part_released:"Reserva de peça liberada",
+    work_order_delivered:"Veículo entregue"
   })[eventType]||"Atualização da OS";
 }
 function historyDetail(row){
@@ -639,6 +640,7 @@ function historyDetail(row){
   if(row.event_type==="stock_movement_recorded") return stockMovementLabel(p.movement_type)+" · "+Number(p.quantity_delta||0).toLocaleString("pt-BR");
   if(row.event_type==="reserved_part_consumed") return Number(p.quantity||0).toLocaleString("pt-BR")+" unidade(s)";
   if(row.event_type==="reserved_part_released") return Number(p.quantity||0).toLocaleString("pt-BR")+" unidade(s)";
+  if(row.event_type==="work_order_delivered") return (p.final_km?"Saída: "+Number(p.final_km).toLocaleString("pt-BR")+" km · ":"")+"vistoria de saída concluída.";
   return p.inspection?"Vistoria de entrada registrada.":"";
 }
 async function loadOrderHistory(order){
@@ -713,6 +715,8 @@ function bindOrderOpeners(){
     if(/aprovação|orçamento/i.test(o.stage+" "+o.status)){
       selectedBudgetOrderId=o.id;
       go("budget");
+    }else if(/pronta|retirada/i.test(o.stage+" "+o.status)){
+      openDeliverySheet(o.id);
     }else openDetail(o.id);
   });
 }
