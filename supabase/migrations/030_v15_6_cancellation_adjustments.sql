@@ -81,6 +81,8 @@ revoke all on table public.cancellation_stock_resolutions from anon,authenticate
 revoke all on table public.cancellation_payment_resolutions from anon,authenticated;
 revoke all on table public.payment_refunds from anon,authenticated;
 revoke all on table public.customer_credits from anon,authenticated;
+grant select on table public.payment_refunds to authenticated;
+grant select on table public.customer_credits to authenticated;
 grant all on table public.cancellation_stock_resolutions to service_role;
 grant all on table public.cancellation_payment_resolutions to service_role;
 grant all on table public.payment_refunds to service_role;
@@ -97,14 +99,16 @@ create policy cancellation_payment_resolutions_no_direct_access
   using (false) with check (false);
 
 drop policy if exists payment_refunds_no_direct_access on public.payment_refunds;
-create policy payment_refunds_no_direct_access
-  on public.payment_refunds for all to authenticated
-  using (false) with check (false);
+drop policy if exists payment_refunds_read on public.payment_refunds;
+create policy payment_refunds_read
+  on public.payment_refunds for select to authenticated
+  using (private.has_permission('finance.read'));
 
 drop policy if exists customer_credits_no_direct_access on public.customer_credits;
-create policy customer_credits_no_direct_access
-  on public.customer_credits for all to authenticated
-  using (false) with check (false);
+drop policy if exists customer_credits_read on public.customer_credits;
+create policy customer_credits_read
+  on public.customer_credits for select to authenticated
+  using (private.has_permission('finance.read'));
 
 create or replace function private.cancellation_stock_resolved_qty(p_reservation_id uuid)
 returns numeric
@@ -624,6 +628,7 @@ select
     where ft.work_order_id=w.id
       and ft.direction='expense'
       and ft.status<>'cancelled'
+      and ft.category<>'Estorno de recebimento'
   ),0) as expense_total,
   coalesce((
     select sum(pi.line_cost)
