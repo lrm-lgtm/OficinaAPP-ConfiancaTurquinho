@@ -509,6 +509,33 @@ async function findOrCreateServerVehicle(customerId,fd){
   if(error) throw error;
   return data;
 }
+async function inspectionEvidenceMetadata(file){
+  if(!crypto?.subtle) throw new Error("evidence_hash_unavailable");
+  const digest=await crypto.subtle.digest("SHA-256",await file.arrayBuffer());
+  const sha256=[...new Uint8Array(digest)].map(byte=>byte.toString(16).padStart(2,"0")).join("");
+  return {
+    sha256,
+    byte_size:Number(file.size||0),
+    mime_type:file.type||"image/jpeg",
+    created_by:staffSession?.user?.id||null
+  };
+}
+function formatEvidenceBytes(value){
+  const bytes=Number(value||0);
+  if(!bytes) return "";
+  if(bytes<1024) return bytes+" B";
+  if(bytes<1024*1024) return (bytes/1024).toFixed(bytes<10*1024?1:0)+" KB";
+  return (bytes/(1024*1024)).toFixed(bytes<10*1024*1024?1:0)+" MB";
+}
+function evidenceIntegrityText(photo){
+  if(photo.sha256 && photo.sealed_at){
+    const short=String(photo.sha256).slice(0,8)+"…"+String(photo.sha256).slice(-6);
+    const size=formatEvidenceBytes(photo.byte_size);
+    return "🔒 Selada · SHA "+short+(size?" · "+size:"");
+  }
+  return "Evidência legada · sem hash";
+}
+
 async function uploadInspectionPhotos(workOrderId){
   const rows=[];
   for(const card of document.querySelectorAll(".capture-card")){
@@ -520,12 +547,14 @@ async function uploadInspectionPhotos(workOrderId){
     const path=workOrderId+"/entry/"+slot+"-"+crypto.randomUUID()+"."+ext;
     const {error:uploadError}=await supabaseClient.storage.from("oficina-evidence").upload(path,file,{contentType:file.type||"image/jpeg",upsert:false});
     if(uploadError) throw uploadError;
+    const evidence=await inspectionEvidenceMetadata(file);
     rows.push({
       work_order_id:workOrderId,
       phase:"entry",
       slot,
       storage_path:path,
-      required:card.classList.contains("required")
+      required:card.classList.contains("required"),
+      ...evidence
     });
   }
   if(rows.length){
@@ -558,12 +587,14 @@ async function uploadQuickCompletionPhotos(workOrderId){
       .upload(storagePath,file,{contentType:file.type||"image/jpeg",upsert:false});
     if(uploadError) throw uploadError;
 
+    const evidence=await inspectionEvidenceMetadata(file);
     rows.push({
       work_order_id:workOrderId,
       phase:"entry",
       slot,
       storage_path:storagePath,
-      required:card.classList.contains("required")
+      required:card.classList.contains("required"),
+      ...evidence
     });
   }
 
@@ -2111,7 +2142,7 @@ async function loadInspectionPhotosInto(order,target){
   target.innerHTML='<div class="inspection-loading">Carregando evidências…</div>';
   const {data:photos,error}=await supabaseClient
     .from("inspection_photos")
-    .select("id,slot,phase,storage_path,required,created_at")
+    .select("id,slot,phase,storage_path,required,created_at,sha256,byte_size,mime_type,created_by,sealed_at")
     .eq("work_order_id",order.id)
     .in("phase",["entry","exit"])
     .order("created_at",{ascending:true});
@@ -2138,6 +2169,7 @@ async function loadInspectionPhotosInto(order,target){
             '<button class="evidence-photo" type="button" data-evidence-url="'+escapeHtml(photo.url)+'">'+
               (photo.url?'<img src="'+escapeHtml(photo.url)+'" alt="'+escapeHtml(slotLabel[photo.slot]||photo.slot)+'">':'<div class="evidence-missing">Sem prévia</div>')+
               '<span>'+escapeHtml(slotLabel[photo.slot]||photo.slot)+'</span>'+
+              '<small class="evidence-integrity '+(photo.sha256&&photo.sealed_at?'sealed':'legacy')+'">'+escapeHtml(evidenceIntegrityText(photo))+'</small>'+
             '</button>'
           ).join("")+'</div>'
         : '<div class="inspection-loading">'+emptyText+'</div>')+
@@ -4550,12 +4582,14 @@ async function uploadDeliveryPhotos(orderId){
       .from("oficina-evidence")
       .upload(storagePath,file,{contentType:file.type||"image/jpeg",upsert:false});
     if(uploadError) throw uploadError;
+    const evidence=await inspectionEvidenceMetadata(file);
     rows.push({
       work_order_id:orderId,
       phase:"exit",
       slot,
       storage_path:storagePath,
-      required:true
+      required:true,
+      ...evidence
     });
   }
   if(rows.length){
