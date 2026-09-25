@@ -3565,3 +3565,8 @@ body.sheet-open .internal-access-gate{
   .cancel-action-grid{grid-column:auto;grid-template-columns:1fr}
   .cancel-adjustment-row.provider{grid-template-columns:1fr}
 }
+
+/* ===== v16 evidence integrity ===== */
+.evidence-photo .evidence-integrity{display:block;margin-top:3px;font-size:8px;line-height:1.3;font-weight:700;text-transform:none;letter-spacing:0}
+.evidence-photo .evidence-integrity.sealed{color:#69d59b}
+.evidence-photo .evidence-integrity.legacy{color:var(--muted)}
