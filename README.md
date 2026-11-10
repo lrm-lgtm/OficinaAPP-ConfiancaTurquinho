@@ -56,3 +56,14 @@ As regras úteis descobertas durante o protótipo Dolibarr serão migradas como 
 ## Identidade visual
 
 A interface toma como referência a fachada real da oficina: base grafite/preta, tipografia clara/prateada, laranja/vermelho como acento principal e amarelo apenas para alertas/destaques. A marca visível do produto é **Auto Mecânica Confiança**.
+
+
+## Backup automático
+
+A operação possui workflow de backup diário criptografado do banco e do Storage.
+
+- Política: [docs/BACKUP.md](docs/BACKUP.md)
+- Recuperação de desastre: [docs/DISASTER_RECOVERY.md](docs/DISASTER_RECOVERY.md)
+- Workflow: [.github/workflows/backup.yml](.github/workflows/backup.yml)
+
+O backup só é considerado ativo depois que os três GitHub Actions Secrets documentados em `docs/BACKUP.md` forem cadastrados e uma execução manual concluir com sucesso.
