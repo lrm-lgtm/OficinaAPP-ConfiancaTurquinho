@@ -497,15 +497,28 @@ const SERVER_REALTIME_TABLES=[
   "budget_items",
   "approvals",
   "catalog_items",
+  "catalog_item_costs",
   "stock_reservations",
   "stock_movements",
   "purchases",
   "purchase_items",
+  "suppliers",
   "receivables",
   "payments",
   "payment_requests",
+  "payment_refunds",
   "financial_transactions",
-  "activity_log"
+  "cancellation_payment_resolutions",
+  "cancellation_stock_resolutions",
+  "provider_payment_adjustment_requests",
+  "activity_log",
+  "permission_catalog"
+];
+
+const SERVER_REALTIME_ACCESS_TABLES=[
+  "staff_profiles",
+  "role_permissions",
+  "staff_permission_overrides"
 ];
 
 function stopServerRealtime(){
@@ -559,6 +572,13 @@ function startServerRealtime(){
       "postgres_changes",
       {event:"*",schema:"public",table},
       ()=>scheduleServerRealtimeSync()
+    );
+  });
+  SERVER_REALTIME_ACCESS_TABLES.forEach(table=>{
+    channel=channel.on(
+      "postgres_changes",
+      {event:"*",schema:"public",table},
+      ()=>setTimeout(()=>refreshStaffSession(),0)
     );
   });
 
