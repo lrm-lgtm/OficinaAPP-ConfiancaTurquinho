@@ -45,6 +45,10 @@ let serverOrders=[];
 let serverClients=[];
 let serverDataReady=false;
 let serverSyncing=false;
+let serverRealtimeChannel=null;
+let serverRealtimeSyncTimer=null;
+let serverRealtimeLastWake=0;
+let activeDetailOrderId=null;
 let selectedCustomerId=null;
 let selectedCustomerHistory=null;
 
@@ -205,7 +209,9 @@ async function refreshStaffSession(message=""){
     await loadMyPermissions();
     await loadAssignableStaff();
     await syncServerData({quiet:true});
+    startServerRealtime();
   }else{
+    stopServerRealtime();
     staffPermissions=[];
     assignableStaff=[];
     serverDataReady=false;
@@ -481,6 +487,98 @@ async function syncServerData({quiet=false}={}){
     serverSyncing=false;
   }
 }
+
+const SERVER_REALTIME_TABLES=[
+  "work_orders",
+  "customers",
+  "vehicles",
+  "inspection_photos",
+  "budget_revisions",
+  "budget_items",
+  "approvals",
+  "catalog_items",
+  "stock_reservations",
+  "stock_movements",
+  "purchases",
+  "purchase_items",
+  "receivables",
+  "payments",
+  "payment_requests",
+  "financial_transactions",
+  "activity_log"
+];
+
+function stopServerRealtime(){
+  if(serverRealtimeSyncTimer){
+    clearTimeout(serverRealtimeSyncTimer);
+    serverRealtimeSyncTimer=null;
+  }
+  if(serverRealtimeChannel&&supabaseClient){
+    supabaseClient.removeChannel(serverRealtimeChannel);
+  }
+  serverRealtimeChannel=null;
+}
+
+async function refreshVisibleServerView(){
+  if(currentView==="finance") await renderFinance();
+  else if(currentView==="stock") await renderStock();
+  else if(currentView==="budget") await renderBudget();
+  else if(currentView==="customer-detail") await renderCustomerHistory();
+  else if(currentView==="team") await renderTeam();
+
+  if(activeDetailOrderId){
+    const order=allOrders().find(o=>String(o.id)===String(activeDetailOrderId));
+    if(order&&currentView==="detail"){
+      const target=document.getElementById("osDetail");
+      if(target) renderOrderDetailInto(target,order,false);
+    }
+    if(order&&document.body.classList.contains("desktop-drawer-open")){
+      const target=document.getElementById("desktopOsDrawerContent");
+      if(target) renderOrderDetailInto(target,order,true);
+    }
+  }
+}
+
+function scheduleServerRealtimeSync(delay=250){
+  if(!staffProfile?.active||!supabaseClient) return;
+  if(serverRealtimeSyncTimer) clearTimeout(serverRealtimeSyncTimer);
+  serverRealtimeSyncTimer=setTimeout(async()=>{
+    serverRealtimeSyncTimer=null;
+    const synced=await syncServerData({quiet:true});
+    if(synced) await refreshVisibleServerView();
+  },delay);
+}
+
+function startServerRealtime(){
+  if(!supabaseClient||!staffProfile?.active) return;
+  stopServerRealtime();
+
+  let channel=supabaseClient.channel("oficina-live-"+String(staffProfile.id||staffSession?.user?.id||"staff"));
+  SERVER_REALTIME_TABLES.forEach(table=>{
+    channel=channel.on(
+      "postgres_changes",
+      {event:"*",schema:"public",table},
+      ()=>scheduleServerRealtimeSync()
+    );
+  });
+
+  serverRealtimeChannel=channel.subscribe(status=>{
+    if(status==="SUBSCRIBED") scheduleServerRealtimeSync(0);
+  });
+}
+
+function wakeServerSync(){
+  if(!staffProfile?.active||document.hidden) return;
+  const now=Date.now();
+  if(now-serverRealtimeLastWake<1500) return;
+  serverRealtimeLastWake=now;
+  scheduleServerRealtimeSync(0);
+}
+
+document.addEventListener("visibilitychange",wakeServerSync);
+window.addEventListener("focus",wakeServerSync);
+window.addEventListener("online",wakeServerSync);
+
 async function findOrCreateServerCustomer(name,phone=""){
   const {data:existing}=await supabaseClient.from("customers").select("id,name,phone").ilike("name",name).limit(1).maybeSingle();
   if(existing) return existing;
@@ -2189,6 +2287,7 @@ async function loadInspectionPhotosInto(order,target){
 function openDetail(id,forcePage=false){
   const o=allOrders().find(x=>String(x.id)===String(id))||(DEMO_MODE?demoOrders[0]:null);
   if(!o){toast("OS não encontrada no servidor.");return}
+  activeDetailOrderId=o.id;
 
   const useDrawer=!forcePage && shouldUseDesktopDrawer();
   const pageDetail=document.getElementById("osDetail");
@@ -4711,6 +4810,7 @@ document.getElementById("staffMemberForm")?.addEventListener("submit",async even
   }finally{submit.disabled=false}
 });
 document.getElementById("staffLogoutBtn")?.addEventListener("click",async()=>{
+  stopServerRealtime();
   await supabaseClient?.auth.signOut();
   staffSession=null;staffProfile=null;staffPermissions=[];assignableStaff=[];
   applyPermissionUI();
