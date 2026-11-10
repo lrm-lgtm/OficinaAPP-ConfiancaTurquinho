@@ -1,0 +1,136 @@
+name: Backup automático da Oficina
+
+on:
+  schedule:
+    # 03:30 BRT (UTC-3)
+    - cron: "30 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oficina-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Banco + fotos
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      SUPABASE_URL: https://koybcvdrbebeicxzitcf.supabase.co
+      SUPABASE_DB_URL: ${{ secrets.OFICINA_SUPABASE_DB_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.OFICINA_SUPABASE_SERVICE_ROLE_KEY }}
+      BACKUP_PASSPHRASE: ${{ secrets.OFICINA_BACKUP_PASSPHRASE }}
+      BACKUP_BUCKET: oficina-evidence
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validar segredos obrigatórios
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in SUPABASE_DB_URL SUPABASE_SERVICE_ROLE_KEY BACKUP_PASSPHRASE; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Secret obrigatório ausente: $name"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "::error::Cadastre os secrets OFICINA_SUPABASE_DB_URL, OFICINA_SUPABASE_SERVICE_ROLE_KEY e OFICINA_BACKUP_PASSPHRASE."
+            exit 1
+          fi
+          if [ "${#BACKUP_PASSPHRASE}" -lt 24 ]; then
+            echo "::error::OFICINA_BACKUP_PASSPHRASE deve ter pelo menos 24 caracteres."
+            exit 1
+          fi
+
+      - name: Instalar Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Preparar diretórios
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p backup/db backup/storage
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > backup/created_at_utc.txt
+          printf '%s\n' "koybcvdrbebeicxzitcf" > backup/project_ref.txt
+
+      - name: Exportar banco
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f backup/db/roles.sql --role-only
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f backup/db/schema.sql
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f backup/db/data.sql --use-copy --data-only
+
+      - name: Exportar fotos e evidências do Storage
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/backup-storage.mjs backup/storage "$BACKUP_BUCKET"
+
+      - name: Validar conteúdo e gerar checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/validate-backup.sh backup
+
+      - name: Classificar retenção
+        id: retention
+        shell: bash
+        run: |
+          set -euo pipefail
+          day="$(date -u +%d)"
+          dow="$(date -u +%u)"
+          if [ "$day" = "01" ]; then
+            klass="monthly"
+            retention="90"
+          elif [ "$dow" = "7" ]; then
+            klass="weekly"
+            retention="35"
+          else
+            klass="daily"
+            retention="14"
+          fi
+          stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+          echo "class=$klass" >> "$GITHUB_OUTPUT"
+          echo "retention=$retention" >> "$GITHUB_OUTPUT"
+          echo "stamp=$stamp" >> "$GITHUB_OUTPUT"
+
+      - name: Compactar e criptografar
+        shell: bash
+        run: |
+          set -euo pipefail
+          stamp="${{ steps.retention.outputs.stamp }}"
+          klass="${{ steps.retention.outputs.class }}"
+          tarball="oficina-backup-${klass}-${stamp}.tar.gz"
+          encrypted="${tarball}.enc"
+
+          tar -C backup -czf "$tarball" .
+          openssl enc -aes-256-cbc -salt -pbkdf2 -iter 250000 -md sha256 \
+            -pass env:BACKUP_PASSPHRASE \
+            -in "$tarball" \
+            -out "$encrypted"
+
+          sha256sum "$encrypted" > "${encrypted}.sha256"
+
+          # Nunca enviar o backup em claro para artifacts.
+          rm -rf backup "$tarball"
+
+      - name: Publicar artifact criptografado
+        uses: actions/upload-artifact@v4
+        with:
+          name: oficina-backup-${{ steps.retention.outputs.class }}-${{ steps.retention.outputs.stamp }}
+          path: |
+            oficina-backup-${{ steps.retention.outputs.class }}-${{ steps.retention.outputs.stamp }}.tar.gz.enc
+            oficina-backup-${{ steps.retention.outputs.class }}-${{ steps.retention.outputs.stamp }}.tar.gz.enc.sha256
+          if-no-files-found: error
+          retention-days: ${{ steps.retention.outputs.retention }}
+          compression-level: 0
